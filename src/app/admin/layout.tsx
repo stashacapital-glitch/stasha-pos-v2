@@ -2,24 +2,48 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, UtensilsCrossed, Users, Settings } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  UtensilsCrossed, 
+  Users, 
+  Settings, 
+  LogOut,
+  Utensils,
+  ChefHat
+} from 'lucide-react';
+import { createClient } from '@/utils/supabase';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+  const { organization } = useAuth();
 
-  const navItems = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Menu Manager', href: '/admin/menu', icon: UtensilsCrossed },
-    { name: 'Staff', href: '/admin/staff', icon: Users },
-    { name: 'Settings', href: '/admin/settings', icon: Settings },
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  const allNavItems = [
+    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, plans: ['basic', 'standard', 'regular', 'pro'] },
+    { name: 'Live POS', href: '/admin/pos', icon: Utensils, plans: ['basic', 'standard', 'regular', 'pro'] },
+    { name: 'Kitchen', href: '/admin/kitchen', icon: ChefHat, plans: ['regular', 'pro'] },
+    { name: 'Menu Manager', href: '/admin/menu', icon: UtensilsCrossed, plans: ['basic', 'standard', 'regular', 'pro'] },
+    { name: 'Staff', href: '/admin/staff', icon: Users, plans: ['basic', 'standard', 'regular', 'pro'] },
+    { name: 'Settings', href: '/admin/settings', icon: Settings, plans: ['basic', 'standard', 'regular', 'pro'] },
   ];
+
+  const currentTier = organization?.subscription_tier || 'basic';
+  const navItems = allNavItems.filter(item => item.plans.includes(currentTier));
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      {/* Sidebar */}
       <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
         <div className="h-16 flex items-center justify-center border-b border-gray-700">
           <h1 className="text-xl font-bold text-orange-400">StashaPOS</h1>
+          <span className="text-[10px] bg-orange-500 text-black px-1 rounded ml-2">{currentTier.toUpperCase()}</span>
         </div>
         
         <nav className="flex-1 p-4 space-y-2">
@@ -41,9 +65,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
+
+        <div className="p-4 border-t border-gray-700">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-4 py-2.5 text-gray-300 hover:bg-red-600 hover:text-white rounded-lg transition"
+          >
+            <LogOut size={20} />
+            <span>Logout</span>
+          </button>
+        </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
         {children}
       </main>

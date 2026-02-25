@@ -1,6 +1,7 @@
  import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
   title: "Stasha POS",
@@ -14,9 +15,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className="antialiased">
+        <Toaster 
+            position="top-right"
+            toastOptions={{
+                style: {
+                    background: '#333',
+                    color: '#fff',
+                },
+            }}
+        />
         <AuthProvider>
-          {children}
+            {children}
         </AuthProvider>
       </body>
     </html>
