@@ -2,18 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  UtensilsCrossed, 
-  Users, 
-  Settings, 
-  LogOut,
-  Utensils,
-  ChefHat
-} from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, Users, Settings, LogOut, Utensils, ChefHat } from 'lucide-react';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import OfflineSync from '@/components/offlineSync';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -50,36 +43,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
-                  isActive 
-                    ? 'bg-orange-500 text-black font-bold' 
-                    : 'text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                <item.icon size={20} />
-                <span>{item.name}</span>
+              <Link key={item.name} href={item.href}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-orange-500 text-black font-bold' : 'text-gray-300 hover:bg-gray-700'}`}>
+                <item.icon size={20} /> <span>{item.name}</span>
               </Link>
             );
           })}
         </nav>
 
         <div className="p-4 border-t border-gray-700">
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-2.5 text-gray-300 hover:bg-red-600 hover:text-white rounded-lg transition"
-          >
-            <LogOut size={20} />
-            <span>Logout</span>
+          <OfflineSync />
+          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-2.5 text-gray-300 hover:bg-red-600 hover:text-white rounded-lg transition mt-2">
+            <LogOut size={20} /> <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
+      <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );
 }

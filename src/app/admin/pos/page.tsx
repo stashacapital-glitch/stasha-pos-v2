@@ -1,199 +1,110 @@
  'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, ShoppingCart, Send } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
-export default function TableOrderPage() {
-  const params = useParams();
-  const router = useRouter();
-  const tableId = params.id as string;
+export default function POSDashboard() {
   const { profile } = useAuth();
-
+  const [tables, setTables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [menuItems, setMenuItems] = useState<any[]>([]);
-  const [cart, setCart] = useState<any[]>([]);
-  const [existingOrder, setExistingOrder] = useState<any | null>(null);
 
   const supabase = createClient();
 
   useEffect(() => {
     if (profile?.org_id) {
-      fetchData(profile.org_id);
+      fetchTables(profile.org_id);
     }
   }, [profile]);
 
-  const fetchData = async (orgId: string) => {
+  const fetchTables = async (orgId: string) => {
     setLoading(true);
     
-    // Fetch Menu Items
-    const { data: items } = await supabase
-      .from('menu_items')
-      .select('*, categories(name)')
-      .eq('org_id', orgId)
-      .eq('available', true);
-    setMenuItems(items || []);
-
-    // Check for existing open order for this table
-    const { data: order } = await supabase
-      .from('orders')
+    // Fetch Tables
+    const { data: tablesData } = await supabase
+      .from('tables')
       .select('*')
-      .eq('table_id', tableId)
-      .eq('status', 'pending') // Check for pending orders (active in kitchen)
-      .single();
+      .eq('org_id', orgId)
+      .order('table_number', { ascending: true });
 
-    if (order) {
-      setExistingOrder(order);
-      setCart(order.items || []);
-    } else {
-        // Also check for 'open' orders (created but not sent to kitchen yet)
-        const { data: openOrder } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('table_id', tableId)
-        .eq('status', 'open')
-        .single();
-        
-        if (openOrder) {
-            setExistingOrder(openOrder);
-            setCart(openOrder.items || []);
-        }
-    }
+    // Fetch Active Orders (Pending = Occupied)
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select('table_id, total_price')
+      .eq('org_id', orgId)
+      .eq('status', 'pending');
 
+    // Merge data
+    const tablesWithStatus = (tablesData || []).map(table => {
+      const activeOrder = (ordersData || []).find(o => o.table_id === table.id);
+      return {
+        ...table,
+        currentBill: activeOrder?.total_price || 0,
+        status: activeOrder ? 'occupied' : 'open'
+      };
+    });
+
+    setTables(tablesWithStatus);
     setLoading(false);
   };
-
-  const addToCart = (item: any) => {
-    const exists = cart.find(c => c.id === item.id);
-    if (exists) {
-      setCart(cart.map(c => c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
-    } else {
-      setCart([...cart, { ...item, quantity: 1 }]);
-    }
-  };
-
-  const removeFromCart = (itemId: string) => {
-    const exists = cart.find(c => c.id === itemId);
-    if (exists && exists.quantity > 1) {
-      setCart(cart.map(c => c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c));
-    } else {
-      setCart(cart.filter(c => c.id !== itemId));
-    }
-  };
-
-  const calculateTotal = () => cart.reduce((sum, item) => sum + (item.price_kes * item.quantity), 0);
-
-  const saveOrder = async () => {
-    if (!profile?.org_id || cart.length === 0) {
-        toast.error("Add items to cart first.");
-        return;
-    }
-
-    const payload = {
-      org_id: profile.org_id,
-      table_id: tableId,
-      items: cart,
-      total_price: calculateTotal(),
-      status: 'pending' // Default status: Sent to Kitchen
-    };
-
-    let error;
-    if (existingOrder) {
-      // Update existing order
-      const res = await supabase
-        .from('orders')
-        .update({ items: cart, total_price: calculateTotal() })
-        .eq('id', existingOrder.id);
-      error = res.error;
-    } else {
-      // Create new order
-      const res = await supabase.from('orders').insert(payload);
-      error = res.error;
-    }
-
-    if (error) {
-      toast.error('Failed: ' + error.message);
-    } else {
-      toast.success('Order Sent to Kitchen!');
-      router.push('/admin/pos');
-    }
-  };
-
-  // Function to print bill (placeholder for future)
-  const printBill = () => {
-      toast("Printing not implemented yet");
-  }
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-gray-900 text-white">
-      
-      {/* Left: Menu */}
-      <div className="flex-1 p-4 overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4 text-orange-400">Menu</h2>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {menuItems.map(item => (
-            <button 
-              key={item.id} 
-              onClick={() => addToCart(item)}
-              className="bg-gray-800 p-3 rounded text-left hover:bg-gray-700 border border-gray-700 active:scale-95 transition"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{item.emoji}</span>
-                <div>
-                  <p className="font-bold text-sm">{item.name}</p>
-                  <p className="text-orange-400 text-xs font-mono">KES {item.price_kes}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-2">Tables</h1>
+      <p className="text-gray-400 mb-8">Select a table to take an order or process payment.</p>
 
-      {/* Right: Cart */}
-      <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-        <div className="p-4 border-b border-gray-700">
-          <h2 className="font-bold flex items-center gap-2 text-lg">
-            <ShoppingCart size={18} /> Current Order
-          </h2>
-        </div>
-        
-        <div className="flex-1 p-4 overflow-y-auto space-y-2">
-          {cart.map(item => (
-            <div key={item.id} className="bg-gray-700 p-2 rounded flex justify-between items-center">
-              <div>
-                <p className="text-sm font-bold">{item.name}</p>
-                <p className="text-xs text-gray-400">KES {item.price_kes} x {item.quantity}</p>
-              </div>
-              <div className="flex gap-1">
-                <button onClick={() => removeFromCart(item.id)} className="bg-red-500 w-6 h-6 rounded text-xs font-bold">-</button>
-                <span className="px-2">{item.quantity}</span>
-                <button onClick={() => addToCart(item)} className="bg-green-500 w-6 h-6 rounded text-xs font-bold">+</button>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+        {tables.map((table) => (
+          <div 
+            key={table.id} 
+            className={`p-6 rounded-xl border flex flex-col justify-between h-52 transition transform hover:scale-105 ${
+              table.status === 'occupied' 
+                ? 'bg-red-900/20 border-red-500' 
+                : 'bg-gray-800 border-gray-700 hover:border-orange-500'
+            }`}
+          >
+            <div>
+              <h3 className="text-3xl font-bold">{table.table_number}</h3>
+              <span className={`text-xs mt-2 inline-block px-2 py-1 rounded ${
+                table.status === 'occupied' ? 'bg-red-500 text-white' : 'bg-green-500 text-black'
+              }`}>
+                {table.status === 'occupied' ? 'OCCUPIED' : 'OPEN'}
+              </span>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <p className="text-lg font-mono text-orange-400 mb-2">
+                KES {table.currentBill.toLocaleString()}
+              </p>
+              
+              <div className="flex gap-2">
+                {/* If Occupied: Show Pay Button (Primary) */}
+                {table.status === 'occupied' && (
+                  <Link href={`/admin/pos/pay/${table.id}`} className="flex-1">
+                    <button className="w-full bg-green-600 text-white text-xs py-2 rounded font-bold hover:bg-green-500 transition">
+                      PAY BILL
+                    </button>
+                  </Link>
+                )}
+
+                {/* Order Button (Secondary if Occupied, Primary if Open) */}
+                <Link href={`/admin/pos/table/${table.id}`} className="flex-1">
+                  <button className={`w-full text-xs py-2 rounded transition ${
+                    table.status === 'occupied' 
+                      ? 'bg-gray-600 text-white hover:bg-gray-500' 
+                      : 'bg-orange-500 text-black font-bold hover:bg-orange-400'
+                  }`}>
+                    {table.status === 'occupied' ? 'ADD MORE' : 'NEW ORDER'}
+                  </button>
+                </Link>
               </div>
             </div>
-          ))}
-          {cart.length === 0 && <p className="text-gray-500 text-center mt-10">Tap items to add</p>}
-        </div>
-
-        <div className="p-4 bg-gray-900 border-t border-gray-700">
-          <div className="flex justify-between mb-4 text-lg">
-            <span>Total:</span>
-            <span className="text-orange-400 font-bold text-xl">KES {calculateTotal()}</span>
           </div>
-          
-          <button 
-            onClick={saveOrder} 
-            disabled={cart.length === 0}
-            className="w-full bg-orange-500 text-black font-bold py-3 rounded flex items-center justify-center gap-2 hover:bg-orange-400 disabled:opacity-50"
-          >
-            <Send size={18} /> Send to Kitchen
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );

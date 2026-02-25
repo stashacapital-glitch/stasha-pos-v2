@@ -5,11 +5,10 @@ import { Session, User } from '@supabase/supabase-js';
 
 type Role = 'owner' | 'admin' | 'barman' | 'waiter' | null;
 
-// Updated Type to include organization
 type AuthContextType = {
   user: User | null;
   profile: any | null;
-  organization: any | null; // This was missing
+  organization: any | null;
   role: Role;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -27,33 +26,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   const supabase = createClient();
 
-  // Helper to fetch profile and org
   const getProfileAndOrg = async (userId: string) => {
     if (!userId) return;
 
-    const { data: profileData, error } = await supabase
-      .from('profiles')
-      .select('*, organizations(*))')
-      .eq('user_id', userId)
-      .single();
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('*, organizations(*)')
+        .eq('user_id', userId)
+        .single();
 
-    if (error) {
-      console.error("Error fetching profile:", error);
-      return;
-    }
-    
-    if (profileData) {
-      setProfile(profileData);
-      setRole(profileData.role as Role);
-      
-      if (profileData.organizations) {
-        setOrganization(profileData.organizations);
+      if (error) {
+        // If no profile found, we just log it. The user needs to run the SQL fix.
+        console.warn("Profile fetch failed (Did you run the SQL script?):", error.message);
+        return;
       }
+      
+      if (profileData) {
+        setProfile(profileData);
+        setRole(profileData.role as Role);
+        
+        if (profileData.organizations) {
+          setOrganization(profileData.organizations);
+        }
+      }
+    } catch (err) {
+      console.error("Unexpected error fetching profile:", err);
     }
   };
 
   useEffect(() => {
-    // 1. Get initial session
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
@@ -66,7 +68,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getSession();
 
-    // 2. Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null);

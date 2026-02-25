@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, ShoppingCart, Send, CreditCard, Printer } from 'lucide-react';
+import { Loader2, ShoppingCart, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function TableOrderPage() {
@@ -29,7 +29,7 @@ export default function TableOrderPage() {
   const fetchData = async (orgId: string) => {
     setLoading(true);
     
-    // Fetch Menu
+    // Fetch Menu Items
     const { data: items } = await supabase
       .from('menu_items')
       .select('*, categories(name)')
@@ -42,15 +42,12 @@ export default function TableOrderPage() {
       .from('orders')
       .select('*')
       .eq('table_id', tableId)
-      .eq('status', 'open')
+      .eq('status', 'pending')
       .single();
 
     if (order) {
       setExistingOrder(order);
       setCart(order.items || []);
-    } else {
-      setExistingOrder(null);
-      setCart([]);
     }
 
     setLoading(false);
@@ -77,26 +74,27 @@ export default function TableOrderPage() {
   const calculateTotal = () => cart.reduce((sum, item) => sum + (item.price_kes * item.quantity), 0);
 
   const saveOrder = async () => {
-    if (!profile?.org_id || cart.length === 0) return;
+    if (!profile?.org_id || cart.length === 0) {
+        toast.error("Add items to cart first.");
+        return;
+    }
 
     const payload = {
       org_id: profile.org_id,
       table_id: tableId,
       items: cart,
       total_price: calculateTotal(),
-      status: 'open'
+      status: 'pending'
     };
 
     let error;
     if (existingOrder) {
-      // Update
       const res = await supabase
         .from('orders')
         .update({ items: cart, total_price: calculateTotal() })
         .eq('id', existingOrder.id);
       error = res.error;
     } else {
-      // Create
       const res = await supabase.from('orders').insert(payload);
       error = res.error;
     }
@@ -104,25 +102,7 @@ export default function TableOrderPage() {
     if (error) {
       toast.error('Failed: ' + error.message);
     } else {
-      toast.success('Order Saved!');
-      fetchData(profile.org_id); // Refresh to get existingOrder ID
-    }
-  };
-
-  const closeBill = async () => {
-    if (!existingOrder) return;
-    
-    if (!confirm('Mark this bill as paid and close?')) return;
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'closed' })
-      .eq('id', existingOrder.id);
-
-    if (error) {
-      toast.error('Failed to close bill');
-    } else {
-      toast.success('Bill Paid! Table is now open.');
+      toast.success('Order Sent!');
       router.push('/admin/pos');
     }
   };
@@ -134,20 +114,20 @@ export default function TableOrderPage() {
       
       {/* Left: Menu */}
       <div className="flex-1 p-4 overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Menu</h2>
+        <h2 className="text-xl font-bold mb-4 text-orange-400">Menu</h2>
         
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {menuItems.map(item => (
             <button 
               key={item.id} 
               onClick={() => addToCart(item)}
-              className="bg-gray-800 p-3 rounded text-left hover:bg-gray-700 border border-gray-700"
+              className="bg-gray-800 p-3 rounded text-left hover:bg-gray-700 border border-gray-700 active:scale-95 transition"
             >
               <div className="flex items-center gap-2">
                 <span className="text-2xl">{item.emoji}</span>
                 <div>
                   <p className="font-bold text-sm">{item.name}</p>
-                  <p className="text-orange-400 text-xs">KES {item.price_kes}</p>
+                  <p className="text-orange-400 text-xs font-mono">KES {item.price_kes}</p>
                 </div>
               </div>
             </button>
@@ -155,10 +135,10 @@ export default function TableOrderPage() {
         </div>
       </div>
 
-      {/* Right: Cart & Payment */}
+      {/* Right: Cart */}
       <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
         <div className="p-4 border-b border-gray-700">
-          <h2 className="font-bold flex items-center gap-2">
+          <h2 className="font-bold flex items-center gap-2 text-lg">
             <ShoppingCart size={18} /> Current Order
           </h2>
         </div>
@@ -171,37 +151,28 @@ export default function TableOrderPage() {
                 <p className="text-xs text-gray-400">KES {item.price_kes} x {item.quantity}</p>
               </div>
               <div className="flex gap-1">
-                <button onClick={() => removeFromCart(item.id)} className="bg-red-500 w-6 h-6 rounded text-xs">-</button>
-                <button onClick={() => addToCart(item)} className="bg-green-500 w-6 h-6 rounded text-xs">+</button>
+                <button onClick={() => removeFromCart(item.id)} className="bg-red-500 w-6 h-6 rounded text-xs font-bold">-</button>
+                <span className="px-2">{item.quantity}</span>
+                <button onClick={() => addToCart(item)} className="bg-green-500 w-6 h-6 rounded text-xs font-bold">+</button>
               </div>
             </div>
           ))}
-          {cart.length === 0 && <p className="text-gray-500 text-center mt-10">No items</p>}
+          {cart.length === 0 && <p className="text-gray-500 text-center mt-10">Tap items to add</p>}
         </div>
 
-        <div className="p-4 bg-gray-900 border-t border-gray-700 space-y-2">
-          <div className="flex justify-between mb-2">
+        <div className="p-4 bg-gray-900 border-t border-gray-700">
+          <div className="flex justify-between mb-4 text-lg">
             <span>Total:</span>
             <span className="text-orange-400 font-bold text-xl">KES {calculateTotal()}</span>
           </div>
-
-          {/* Save Order Button */}
+          
           <button 
             onClick={saveOrder} 
-            className="w-full bg-blue-600 text-white font-bold py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-500"
+            disabled={cart.length === 0}
+            className="w-full bg-orange-500 text-black font-bold py-3 rounded flex items-center justify-center gap-2 hover:bg-orange-400 disabled:opacity-50"
           >
-            <Send size={18} /> {existingOrder ? 'Update Order' : 'Send to Kitchen'}
+            <Send size={18} /> Send to Kitchen
           </button>
-
-          {/* Payment Button (Only shows if order exists) */}
-          {existingOrder && (
-            <button 
-              onClick={closeBill}
-              className="w-full bg-green-600 text-white font-bold py-2 rounded flex items-center justify-center gap-2 hover:bg-green-500"
-            >
-              <CreditCard size={18} /> Close Bill (Payment)
-            </button>
-          )}
         </div>
       </div>
     </div>

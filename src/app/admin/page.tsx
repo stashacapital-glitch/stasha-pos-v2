@@ -1,41 +1,30 @@
-'use client';
+ 'use client';
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Users, Utensils, TrendingUp } from 'lucide-react';
+import { Loader2, Users, Utensils, DollarSign, ShoppingBag } from 'lucide-react';
+import Link from 'next/link';
 
 export default function AdminDashboard() {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ tables: 0, items: 0 });
+  const [stats, setStats] = useState({ tables: 0, items: 0, sales: 0, staff: 1 });
 
   const supabase = createClient();
 
   useEffect(() => {
-    if (profile?.org_id) {
-      fetchData(profile.org_id);
-    }
+    if (profile?.org_id) fetchData(profile.org_id);
   }, [profile]);
 
   const fetchData = async (orgId: string) => {
     setLoading(true);
+    const { count: tablesCount } = await supabase.from('tables').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
+    const { count: itemsCount } = await supabase.from('menu_items').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
+    const { data: ordersData } = await supabase.from('orders').select('total_price').eq('org_id', orgId);
+    const totalSales = ordersData?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0;
 
-    const { count: tablesCount } = await supabase
-      .from('tables')
-      .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId);
-
-    const { count: itemsCount } = await supabase
-      .from('menu_items')
-      .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId);
-
-    setStats({
-      tables: tablesCount || 0,
-      items: itemsCount || 0,
-    });
-
+    setStats({ tables: tablesCount || 0, items: itemsCount || 0, sales: totalSales, staff: 1 });
     setLoading(false);
   };
 
@@ -43,32 +32,35 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+      <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
       <p className="text-gray-400 mb-8">Welcome back!</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Link href="/admin/pos" className="block bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-blue-500">
+          <p className="text-gray-400 text-sm">Total Tables</p>
+          <p className="text-3xl font-bold mt-1">{stats.tables}</p>
+        </Link>
+        <Link href="/admin/menu" className="block bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-green-500">
+          <p className="text-gray-400 text-sm">Menu Items</p>
+          <p className="text-3xl font-bold mt-1">{stats.items}</p>
+        </Link>
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-gray-400 text-sm">Total Tables</p>
-              <p className="text-3xl font-bold mt-1">{stats.tables}</p>
-            </div>
-            <div className="p-3 bg-blue-500/20 rounded-lg">
-              <Utensils className="text-blue-400" size={24} />
-            </div>
-          </div>
+          <p className="text-gray-400 text-sm">Total Sales</p>
+          <p className="text-3xl font-bold mt-1 text-orange-400">KES {stats.sales.toLocaleString()}</p>
         </div>
-
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-gray-400 text-sm">Menu Items</p>
-              <p className="text-3xl font-bold mt-1">{stats.items}</p>
-            </div>
-            <div className="p-3 bg-green-500/20 rounded-lg">
-              <TrendingUp className="text-green-400" size={24} />
-            </div>
-          </div>
+          <p className="text-gray-400 text-sm">Staff</p>
+          <p className="text-3xl font-bold mt-1">{stats.staff}</p>
+        </div>
+      </div>
+
+      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+        <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Link href="/admin/pos" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Open POS</Link>
+          <Link href="/admin/menu" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Menu</Link>
+          <Link href="/admin/kitchen" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Kitchen</Link>
+          <Link href="/admin/settings" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Settings</Link>
         </div>
       </div>
     </div>
