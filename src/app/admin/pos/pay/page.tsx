@@ -1,4 +1,4 @@
-'use client';
+ 'use client';
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -16,7 +16,7 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [order, setOrder] = useState<any | null>(null);
-  const [amountTendered, setAmountTendered] = useState(0);
+  const [amountTendered, setAmountTendered] = useState<number | string>(''); // Fix type
 
   const supabase = createClient();
 
@@ -26,46 +26,60 @@ export default function PaymentPage() {
 
   const fetchOrder = async (orgId: string) => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('orders')
       .select('*, tables(table_number)')
       .eq('org_id', orgId)
       .eq('table_id', tableId)
-      .eq('status', 'pending') // Only fetch active orders
+      .eq('status', 'pending')
       .single();
 
-    if (data) setOrder(data);
+    if (error) {
+        console.error("Error fetching order:", error);
+        toast.error("Could not load order.");
+    } else {
+        setOrder(data);
+    }
     setLoading(false);
   };
 
   const handlePayment = async (method: string) => {
-    if (!order) return;
-    
-    // Simple validation for Cash
-    if (method === 'Cash' && amountTendered < order.total_price) {
-        toast.error("Amount tendered is less than total bill.");
+    if (!order) {
+        toast.error("No order found.");
         return;
     }
 
-    setProcessing(true);
+    const total = order.total_price;
+    const tendered = Number(amountTendered) || 0;
 
-    // Update Order Status to 'Paid'
+    // Validation for Cash
+    if (method === 'Cash' && tendered < total) {
+      toast.error("Amount tendered is less than total bill.");
+      return;
+    }
+
+    setProcessing(true);
+    console.log("Processing payment...");
+
+    // Update Order Status
     const { error } = await supabase
       .from('orders')
       .update({ 
           status: 'paid', 
           payment_method: method,
-          amount_tendered: method === 'Cash' ? amountTendered : order.total_price,
-          change_due: method === 'Cash' ? amountTendered - order.total_price : 0
+          amount_tendered: method === 'Cash' ? tendered : total,
+          change_due: method === 'Cash' ? tendered - total : 0
       })
       .eq('id', order.id);
 
     if (error) {
-      toast.error('Payment Failed: ' + error.message);
+      console.error("Payment Error:", error);
+      toast.error("Payment Failed: " + error.message);
       setProcessing(false);
     } else {
+      console.log("Payment Success");
       toast.success('Payment Successful!');
-      router.push('/admin/pos'); // Go back to tables
+      router.push('/admin/pos');
     }
   };
 
@@ -75,7 +89,7 @@ export default function PaymentPage() {
       <div className="p-8 text-center text-gray-400">
           No active bill found for this table.
           <br/>
-          <button onClick={() => router.back()} className="mt-4 text-orange-400">Go Back</button>
+          <button onClick={() => router.back()} className="mt-4 text-orange-400 hover:underline">Go Back</button>
       </div>
   );
 
@@ -116,13 +130,13 @@ export default function PaymentPage() {
             <input 
               type="number" 
               placeholder="0"
-              value={amountTendered || ''} 
-              onChange={(e) => setAmountTendered(parseInt(e.target.value))}
+              value={amountTendered} 
+              onChange={(e) => setAmountTendered(e.target.value)}
               className="w-full p-3 bg-gray-700 rounded border border-gray-600 text-white text-xl font-mono"
             />
-            {amountTendered >= order.total_price && (
+            {Number(amountTendered) >= order.total_price && (
               <p className="text-green-400 text-sm mt-2">
-                Change: KES {amountTendered - order.total_price}
+                Change: KES {Number(amountTendered) - order.total_price}
               </p>
             )}
           </div>
@@ -131,15 +145,15 @@ export default function PaymentPage() {
             <button 
               onClick={() => handlePayment('Cash')}
               disabled={processing}
-              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 p-4 rounded text-white font-bold"
+              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 p-4 rounded text-white font-bold disabled:opacity-50"
             >
-              <Banknote /> PAY CASH
+              <Banknote /> {processing ? 'Processing...' : 'PAY CASH'}
             </button>
 
             <button 
               onClick={() => handlePayment('M-Pesa')}
               disabled={processing}
-              className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 p-4 rounded text-white font-bold"
+              className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 p-4 rounded text-white font-bold disabled:opacity-50"
             >
               <Smartphone /> M-PESA (Exact)
             </button>
@@ -147,7 +161,7 @@ export default function PaymentPage() {
              <button 
               onClick={() => handlePayment('Card')}
               disabled={processing}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 p-4 rounded text-white font-bold"
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 p-4 rounded text-white font-bold disabled:opacity-50"
             >
               <CreditCard /> CARD (Exact)
             </button>

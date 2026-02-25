@@ -29,20 +29,32 @@ export default function POSDashboard() {
       .eq('org_id', orgId)
       .order('table_number', { ascending: true });
 
-    // Fetch Active Orders (Pending = Occupied)
+    // Fetch Active Orders (Pending = Occupied, Ready = Food Ready)
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('table_id, total_price')
+      .select('table_id, total_price, status')
       .eq('org_id', orgId)
-      .eq('status', 'pending');
+      .in('status', ['pending', 'ready']); 
 
     // Merge data
     const tablesWithStatus = (tablesData || []).map(table => {
       const activeOrder = (ordersData || []).find(o => o.table_id === table.id);
+      
+      let status = 'open';
+      let hasReadyFood = false;
+
+      if (activeOrder) {
+        status = 'occupied';
+        if (activeOrder.status === 'ready') {
+            hasReadyFood = true; // Food is ready!
+        }
+      }
+
       return {
         ...table,
         currentBill: activeOrder?.total_price || 0,
-        status: activeOrder ? 'occupied' : 'open'
+        status: status,
+        hasReadyFood: hasReadyFood
       };
     });
 
@@ -62,17 +74,25 @@ export default function POSDashboard() {
           <div 
             key={table.id} 
             className={`p-6 rounded-xl border flex flex-col justify-between h-52 transition transform hover:scale-105 ${
-              table.status === 'occupied' 
-                ? 'bg-red-900/20 border-red-500' 
-                : 'bg-gray-800 border-gray-700 hover:border-orange-500'
+              table.hasReadyFood 
+                ? 'bg-green-900/30 border-green-500 animate-pulse' // FLASHING GREEN
+                : table.status === 'occupied' 
+                    ? 'bg-red-900/20 border-red-500' 
+                    : 'bg-gray-800 border-gray-700 hover:border-orange-500'
             }`}
           >
             <div>
               <h3 className="text-3xl font-bold">{table.table_number}</h3>
+              
+              {/* Status Badge */}
               <span className={`text-xs mt-2 inline-block px-2 py-1 rounded ${
-                table.status === 'occupied' ? 'bg-red-500 text-white' : 'bg-green-500 text-black'
+                  table.hasReadyFood 
+                      ? 'bg-green-500 text-black font-bold' 
+                      : table.status === 'occupied' 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-gray-500 text-white'
               }`}>
-                {table.status === 'occupied' ? 'OCCUPIED' : 'OPEN'}
+                  {table.hasReadyFood ? 'READY!' : table.status === 'occupied' ? 'OCCUPIED' : 'OPEN'}
               </span>
             </div>
 
@@ -82,7 +102,6 @@ export default function POSDashboard() {
               </p>
               
               <div className="flex gap-2">
-                {/* If Occupied: Show Pay Button (Primary) */}
                 {table.status === 'occupied' && (
                   <Link href={`/admin/pos/pay/${table.id}`} className="flex-1">
                     <button className="w-full bg-green-600 text-white text-xs py-2 rounded font-bold hover:bg-green-500 transition">
@@ -91,7 +110,6 @@ export default function POSDashboard() {
                   </Link>
                 )}
 
-                {/* Order Button (Secondary if Occupied, Primary if Open) */}
                 <Link href={`/admin/pos/table/${table.id}`} className="flex-1">
                   <button className={`w-full text-xs py-2 rounded transition ${
                     table.status === 'occupied' 

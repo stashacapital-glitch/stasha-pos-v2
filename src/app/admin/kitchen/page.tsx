@@ -25,29 +25,29 @@ export default function KitchenPage() {
       .from('orders')
       .select('*, tables(table_number)')
       .eq('org_id', orgId)
-      .eq('status', 'pending')
+      .eq('status', 'pending') // Only show orders waiting to be cooked
       .order('created_at', { ascending: true });
     
     setOrders(data || []);
     setLoading(false);
   };
 
-  const handleComplete = async (orderId: string) => {
+  // Changed from handleComplete to handleReady
+  const handleReady = async (orderId: string) => {
     const { error } = await supabase
       .from('orders')
-      .update({ status: 'completed' })
+      .update({ status: 'ready' }) // Set status to 'ready'
       .eq('id', orderId);
 
     if (!error) {
-      toast.success('Order Completed!');
+      toast.success('Marked as Ready for Pickup!');
       if (profile?.org_id) fetchOrders(profile.org_id);
     }
   };
 
-  // Helper to split items
   const categorizeItems = (items: any[]) => {
     const bar = items.filter(item => item.categories?.name === 'Beverages');
-    const kitchen = items.filter(item => item.categories?.name !== 'Beverages'); // Assuming everything else is food
+    const kitchen = items.filter(item => item.categories?.name !== 'Beverages');
     return { bar, kitchen };
   };
 
@@ -59,7 +59,7 @@ export default function KitchenPage() {
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* Column 1: Bar Station (Drinks) */}
+        {/* Bar Station */}
         <div className="bg-gray-800 p-4 rounded-xl border border-yellow-500">
           <div className="flex items-center gap-2 border-b border-gray-700 pb-3 mb-4">
             <Beer className="text-yellow-400" size={24} />
@@ -68,7 +68,7 @@ export default function KitchenPage() {
 
             {orders.map(order => {
                 const { bar } = categorizeItems(order.items);
-                if (bar.length === 0) return null; // Don't show order if no drinks
+                if (bar.length === 0) return null;
 
                 return (
                     <div key={order.id} className="bg-gray-700 p-4 rounded mb-4">
@@ -84,15 +84,15 @@ export default function KitchenPage() {
                                 </li>
                             ))}
                         </ul>
-                        <button onClick={() => handleComplete(order.id)} className="w-full bg-yellow-500 text-black font-bold py-1 rounded text-sm">
-                            Done
+                        <button onClick={() => handleReady(order.id)} className="w-full bg-yellow-500 text-black font-bold py-1 rounded text-sm hover:bg-yellow-400">
+                            Ready
                         </button>
                     </div>
                 );
             })}
         </div>
 
-        {/* Column 2: Kitchen Station (Food) */}
+        {/* Kitchen Station */}
         <div className="bg-gray-800 p-4 rounded-xl border border-orange-500">
             <div className="flex items-center gap-2 border-b border-gray-700 pb-3 mb-4">
                 <ChefHat className="text-orange-400" size={24} />
@@ -101,7 +101,7 @@ export default function KitchenPage() {
 
             {orders.map(order => {
                 const { kitchen } = categorizeItems(order.items);
-                if (kitchen.length === 0) return null; // Don't show order if no food
+                if (kitchen.length === 0) return null;
 
                 return (
                     <div key={order.id} className="bg-gray-700 p-4 rounded mb-4">
@@ -117,8 +117,8 @@ export default function KitchenPage() {
                                 </li>
                             ))}
                         </ul>
-                        <button onClick={() => handleComplete(order.id)} className="w-full bg-orange-500 text-black font-bold py-1 rounded text-sm">
-                            Done
+                        <button onClick={() => handleReady(order.id)} className="w-full bg-orange-500 text-black font-bold py-1 rounded text-sm hover:bg-orange-400">
+                            Ready
                         </button>
                     </div>
                 );
