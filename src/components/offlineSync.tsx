@@ -1,4 +1,4 @@
-'use client';
+ 'use client';
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase';
@@ -16,6 +16,7 @@ export default function OfflineSync() {
       const queue = getOfflineQueue();
       setQueueCount(queue.length);
     };
+
     checkQueue();
 
     window.addEventListener('online', () => {

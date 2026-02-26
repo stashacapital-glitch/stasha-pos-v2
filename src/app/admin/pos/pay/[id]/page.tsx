@@ -26,20 +26,25 @@ export default function PaymentPage() {
 
   const fetchOrder = async (orgId: string) => {
     setLoading(true);
+    
+    // SIMPLIFIED QUERY: Removed the "tables" join to fix 406 error
     const { data, error } = await supabase
       .from('orders')
-      .select('*, tables(table_number)')
+      .select('*') 
       .eq('org_id', orgId)
       .eq('table_id', tableId)
-      .in('status', ['pending', 'ready']) // Fetch orders waiting or ready
-      .single();
+      .in('status', ['pending', 'ready'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(); 
 
     if (error) {
         console.error("Error fetching order:", error);
-        toast.error("Could not load order.");
+        toast.error("Error loading order.");
     } else {
         setOrder(data);
     }
+    
     setLoading(false);
   };
 
@@ -49,23 +54,17 @@ export default function PaymentPage() {
     const total = order.total_price;
     const tendered = Number(amountTendered) || 0;
 
-    // Validation for Cash
     if (method === 'Cash' && tendered < total) {
       toast.error("Amount tendered is less than total bill.");
       return;
     }
 
-    // --- SOFT WARNING LOGIC START ---
-    // If order is still pending (Kitchen hasn't said "Ready"), warn the user.
     if (order.status === 'pending') {
         const confirmPayment = window.confirm(
-            "WARNING: The Kitchen has not marked this order as 'Ready'.\n\nAre you sure you want to process payment? (e.g. Did they finish eating?)"
+            "WARNING: The Kitchen has not marked this order as 'Ready'.\n\nAre you sure you want to process payment?"
         );
-        if (!confirmPayment) {
-            return; // Stop if user clicks "Cancel"
-        }
+        if (!confirmPayment) return;
     }
-    // --- SOFT WARNING LOGIC END ---
 
     setProcessing(true);
 
@@ -100,7 +99,8 @@ export default function PaymentPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-3xl font-bold mb-2">Payment: Table {order.tables?.table_number}</h1>
+      {/* Use tableId from URL instead of join */}
+      <h1 className="text-3xl font-bold mb-2">Payment: Table {tableId.slice(0, 4)}</h1>
       <p className="text-gray-400 mb-6">Review order and complete payment.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

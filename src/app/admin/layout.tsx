@@ -2,11 +2,21 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, UtensilsCrossed, Users, Settings, LogOut, Utensils, ChefHat } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  UtensilsCrossed, 
+  Users, 
+  Settings, 
+  LogOut,
+  Utensils,
+  ChefHat,
+  FileText,
+  TrendingUp // Added for Reports
+} from 'lucide-react';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import OfflineSync from '@/components/offlineSync';
+import OfflineSync from '@/components/OfflineSync';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -24,6 +34,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Live POS', href: '/admin/pos', icon: Utensils, plans: ['basic', 'standard', 'regular', 'pro'] },
     { name: 'Kitchen', href: '/admin/kitchen', icon: ChefHat, plans: ['regular', 'pro'] },
     { name: 'Menu Manager', href: '/admin/menu', icon: UtensilsCrossed, plans: ['basic', 'standard', 'regular', 'pro'] },
+    { name: 'Reports', href: '/admin/reports', icon: TrendingUp, plans: ['basic', 'standard', 'regular', 'pro'] },
+    { name: 'Stock Returns', href: '/admin/reports/returns', icon: FileText, plans: ['standard', 'regular', 'pro'] },
     { name: 'Staff', href: '/admin/staff', icon: Users, plans: ['basic', 'standard', 'regular', 'pro'] },
     { name: 'Settings', href: '/admin/settings', icon: Settings, plans: ['basic', 'standard', 'regular', 'pro'] },
   ];
@@ -43,9 +55,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link key={item.name} href={item.href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-orange-500 text-black font-bold' : 'text-gray-300 hover:bg-gray-700'}`}>
-                <item.icon size={20} /> <span>{item.name}</span>
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
+                  isActive 
+                    ? 'bg-orange-500 text-black font-bold' 
+                    : 'text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                <item.icon size={20} />
+                <span>{item.name}</span>
               </Link>
             );
           })}
@@ -53,13 +73,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <div className="p-4 border-t border-gray-700">
           <OfflineSync />
-          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-2.5 text-gray-300 hover:bg-red-600 hover:text-white rounded-lg transition mt-2">
-            <LogOut size={20} /> <span>Logout</span>
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-4 py-2.5 text-gray-300 hover:bg-red-600 hover:text-white rounded-lg transition mt-2"
+          >
+            <LogOut size={20} />
+            <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto">
+        {children}
+      </main>
     </div>
   );
 }
