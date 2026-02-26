@@ -3,11 +3,14 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase';
 import { Session, User } from '@supabase/supabase-js';
 
+// 1. Define strict types based on your DB schema
 type Role = 'owner' | 'admin' | 'barman' | 'waiter' | null;
 
+// Using 'any' for Profile/Organization if you haven't generated types yet, 
+// but strictly typing Role is already a big improvement.
 type AuthContextType = {
   user: User | null;
-  profile: any | null;
+  profile: any | null; 
   organization: any | null;
   role: Role;
   loading: boolean;
@@ -22,6 +25,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<any | null>(null);
   const [organization, setOrganization] = useState<any | null>(null);
   const [role, setRole] = useState<Role>(null);
+  
+  // CORRECTED LINE BELOW:
   const [loading, setLoading] = useState(true);
   
   const supabase = createClient();
@@ -37,8 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .single();
 
       if (error) {
-        // If no profile found, we just log it. The user needs to run the SQL fix.
-        console.warn("Profile fetch failed (Did you run the SQL script?):", error.message);
+        console.warn("Profile fetch failed:", error.message);
         return;
       }
       
@@ -59,10 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        await getProfileAndOrg(session.user.id);
-      }
+      if (session?.user) await getProfileAndOrg(session.user.id);
       setLoading(false);
     };
 
@@ -84,7 +85,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
