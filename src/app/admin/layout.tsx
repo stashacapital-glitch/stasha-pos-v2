@@ -1,17 +1,10 @@
  'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
-  LayoutDashboard, 
-  UtensilsCrossed, 
-  Users, 
-  Settings, 
-  LogOut,
-  Utensils,
-  ChefHat,
-  FileText,
-  TrendingUp // Added for Reports
+  LayoutDashboard, UtensilsCrossed, Users, Settings, LogOut, Utensils, ChefHat, FileText, TrendingUp, Menu, X
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
@@ -23,6 +16,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const supabase = createClient();
   const { organization } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile toggle
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -45,19 +39,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
-        <div className="h-16 flex items-center justify-center border-b border-gray-700">
+      
+      {/* Overlay for mobile */}
+      {sidebarOpen && (
+        <div 
+            className="fixed inset-0 bg-black/50 z-20 lg:hidden" 
+            onClick={() => setSidebarOpen(false)}
+        ></div>
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-gray-800 border-r border-gray-700 flex flex-col transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:transform-none`}>
+        <div className="h-16 flex items-center justify-between border-b border-gray-700 px-4">
           <h1 className="text-xl font-bold text-orange-400">StashaPOS</h1>
           <span className="text-[10px] bg-orange-500 text-black px-1 rounded ml-2">{currentTier.toUpperCase()}</span>
+          {/* Close button for mobile */}
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-400">
+            <X size={24} />
+          </button>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={() => setSidebarOpen(false)} // Close on click mobile
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
                   isActive 
                     ? 'bg-orange-500 text-black font-bold' 
@@ -83,7 +92,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
+      {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
+        {/* Mobile Header */}
+        <div className="lg:hidden sticky top-0 z-10 bg-gray-800 p-4 border-b border-gray-700 flex items-center gap-4">
+            <button onClick={() => setSidebarOpen(true)} className="text-gray-400 hover:text-white">
+                <Menu size={24} />
+            </button>
+            <span className="font-bold text-lg">StashaPOS</span>
+        </div>
+        
         {children}
       </main>
     </div>
