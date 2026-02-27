@@ -49,9 +49,10 @@ export default function ReportsPage() {
 
     // 2. Process Sales Data
     if (orders) {
-      const total = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-      const cash = orders.filter(o => o.payment_method === 'cash').reduce((sum, o) => sum + (o.total_price || 0), 0);
-      const mpesa = orders.filter(o => o.payment_method === 'mpesa').reduce((sum, o) => sum + (o.total_price || 0), 0);
+      // FIX: Added ': number' type annotation to 'sum' parameter
+      const total = orders.reduce((sum: number, o) => sum + (o.total_price || 0), 0);
+      const cash = orders.filter(o => o.payment_method === 'cash').reduce((sum: number, o) => sum + (o.total_price || 0), 0);
+      const mpesa = orders.filter(o => o.payment_method === 'mpesa').reduce((sum: number, o) => sum + (o.total_price || 0), 0);
       
       setSalesData({ total, count: orders.length, cash, mpesa });
 
