@@ -34,8 +34,9 @@ export default function POSDashboard() {
       .eq('org_id', orgId)
       .in('status', ['pending', 'ready']);
 
-    const tablesWithStatus = (tablesData || []).map((table, index) => {
-      const activeOrder = (ordersData || []).find(o => o.table_id === table.id);
+    // FIX: Added ': any' types to parameters
+    const tablesWithStatus = (tablesData || []).map((table: any, index: number) => {
+      const activeOrder = (ordersData || []).find((o: any) => o.table_id === table.id);
       
       // SMART DISPLAY NAME: Handle both Numbers and Text safely
       let displayName = `Table ${index + 1}`;
