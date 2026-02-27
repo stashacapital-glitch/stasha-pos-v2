@@ -30,7 +30,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Menu Manager', href: '/admin/menu', icon: UtensilsCrossed, plans: ['basic', 'standard', 'regular', 'pro'] },
     { name: 'Reports', href: '/admin/reports', icon: TrendingUp, plans: ['basic', 'standard', 'regular', 'pro'] },
     { name: 'Stock Returns', href: '/admin/reports/returns', icon: FileText, plans: ['standard', 'regular', 'pro'] },
-    { name: 'Staff', href: '/admin/staff', icon: Users, plans: ['basic', 'standard', 'regular', 'pro'] },
+    // UPDATED: Changed link to point to the new Team page
+    { name: 'Team', href: '/admin/settings/team', icon: Users, plans: ['basic', 'standard', 'regular', 'pro'] },
     { name: 'Settings', href: '/admin/settings', icon: Settings, plans: ['basic', 'standard', 'regular', 'pro'] },
   ];
 

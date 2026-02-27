@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
-  // 1. Initialize Supabase with Service Role Key for admin privileges
+  // Initialize Supabase with Service Role Key for admin privileges
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 2. Check if user already exists in Auth
+    // 1. Check if user already exists in Auth
     const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
     
     if (listError) throw listError;
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const existingUser = users.find(u => u.email === email);
 
     if (existingUser) {
-      // 3A. User exists: Update their profile to join the org
+      // 2A. User exists: Update their profile to join the org
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ org_id, role })
@@ -34,9 +34,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'User added to organization successfully!' });
 
     } else {
-      // 3B. User does not exist: Send an invitation
-      // Note: This requires your Supabase project to have email templates configured.
-      // We pass org_id and role in user_metadata so we can use them when the user signs up.
+      // 2B. User does not exist: Send an invitation
+      // We pass org_id and role in user_metadata
       const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
         data: {
           org_id,

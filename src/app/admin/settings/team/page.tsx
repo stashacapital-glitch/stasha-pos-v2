@@ -1,4 +1,4 @@
-'use client';
+ 'use client';
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,7 +59,7 @@ export default function TeamManagementPage() {
         toast.success(data.message);
         setShowModal(false);
         setEmail('');
-        fetchTeam(); // Refresh list
+        fetchTeam(); 
       } else {
         toast.error(data.error || 'Something went wrong');
       }
@@ -70,10 +70,7 @@ export default function TeamManagementPage() {
     }
   };
 
-  // TODO: Implement Remove Member logic if needed
   const handleRemove = async (userId: string) => {
-    // For safety, we usually just set their org_id to null or role to null
-    // rather than deleting the user account.
     if(!confirm("Remove this user from your organization?")) return;
 
     const { error } = await supabase
