@@ -59,7 +59,8 @@ export default function ReturnsReportPage() {
       .lte('created_at', endOfDay);
 
     const salesMap: Record<string, number> = {};
-    orders?.forEach(order => {
+    // FIX: Added type annotation for order
+    orders?.forEach((order: any) => {
       order.items.forEach((item: any) => {
         salesMap[item.id] = (salesMap[item.id] || 0) + item.quantity;
       });
@@ -72,7 +73,8 @@ export default function ReturnsReportPage() {
       .eq('date', reportDate);
 
     const purchaseMap: Record<string, number> = {};
-    purchases?.forEach(p => {
+    // FIX: Added type annotation for p
+    purchases?.forEach((p: any) => {
       purchaseMap[p.item_id] = (purchaseMap[p.item_id] || 0) + p.quantity;
     });
 
@@ -83,7 +85,8 @@ export default function ReturnsReportPage() {
       .eq('date', reportDate);
 
     const countMap: Record<string, number> = {};
-    counts?.forEach(c => {
+    // FIX: Added type annotation for c
+    counts?.forEach((c: any) => {
       countMap[c.item_id] = c.quantity;
     });
 
@@ -98,11 +101,13 @@ export default function ReturnsReportPage() {
       .eq('date', prevDateStr);
 
     const openingMap: Record<string, number> = {};
-    prevCounts?.forEach(c => {
+    // FIX: Added type annotation for c
+    prevCounts?.forEach((c: any) => {
       openingMap[c.item_id] = c.quantity;
     });
 
-    const data = menuItems.map(item => {
+    // FIX: Added type annotation for item
+    const data = menuItems.map((item: any) => {
       const opening = openingMap[item.id] || 0;
       const purchased = purchaseMap[item.id] || 0;
       const sold = salesMap[item.id] || 0;
