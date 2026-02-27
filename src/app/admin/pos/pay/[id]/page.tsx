@@ -10,13 +10,16 @@ import toast from 'react-hot-toast';
 export default function PaymentPage() {
   const params = useParams();
   const router = useRouter();
-  const tableId = params.id as string;
+  const tableId = (params && params.id) ? String(params.id) : '';
   const { profile } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [order, setOrder] = useState<any | null>(null);
   const [amountTendered, setAmountTendered] = useState<number | string>('');
+  
+  // State for the REAL table number (e.g. "1", "2")
+  const [tableDisplayName, setTableDisplayName] = useState('...');
 
   const supabase = createClient();
 
@@ -27,29 +30,54 @@ export default function PaymentPage() {
   const fetchOrder = async (orgId: string) => {
     setLoading(true);
     
-    // SIMPLIFIED QUERY: Removed the "tables" join to fix 406 error
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*') 
-      .eq('org_id', orgId)
-      .eq('table_id', tableId)
-      .in('status', ['pending', 'ready'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(); 
+    try {
+      // 1. Fetch the REAL Table Number from DB (Fixes "176e" issue)
+      const { data: tableData } = await supabase
+        .from('tables')
+        .select('table_number')
+        .eq('id', tableId)
+        .single();
 
-    if (error) {
-        console.error("Error fetching order:", error);
-        toast.error("Error loading order.");
-    } else {
-        setOrder(data);
+      if (tableData && tableData.table_number) {
+        setTableDisplayName(tableData.table_number);
+      } else {
+        setTableDisplayName('Unknown');
+      }
+
+      // 2. Fetch the Active Order
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*') 
+        .eq('org_id', orgId)
+        .eq('table_id', tableId)
+        .in('status', ['pending', 'ready'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(); 
+
+      if (error) throw error;
+      setOrder(data);
+
+    } catch (err) {
+      console.error("Fetch Error:", err);
+      toast.error("Error loading data");
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
+  };
+
+  const getMenuItemId = async (itemName: string) => {
+    const { data } = await supabase
+      .from('menu_items')
+      .select('id')
+      .eq('name', itemName)
+      .eq('org_id', profile?.org_id)
+      .single();
+    return data?.id;
   };
 
   const handlePayment = async (method: string) => {
-    if (!order) return;
+    if (!order || !profile?.org_id) return;
 
     const total = order.total_price;
     const tendered = Number(amountTendered) || 0;
@@ -67,6 +95,26 @@ export default function PaymentPage() {
     }
 
     setProcessing(true);
+
+    try {
+      const stockOperations = order.items.map(async (item: any) => {
+        let itemId = item.id || item.menu_item_id;
+        if (!itemId) itemId = await getMenuItemId(item.name);
+
+        if (itemId) {
+            await supabase.from('stock_transactions').insert({
+                org_id: profile.org_id,
+                menu_item_id: itemId,
+                quantity: (item.quantity || 1) * -1,
+                transaction_type: 'sale',
+                note: `Sale: Order ${order.id ? order.id.substring(0, 8) : 'unknown'}`
+            });
+        }
+      });
+      await Promise.all(stockOperations);
+    } catch (err) {
+      console.error("Stock Error:", err);
+    }
 
     const { error } = await supabase
       .from('orders')
@@ -99,8 +147,7 @@ export default function PaymentPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      {/* Use tableId from URL instead of join */}
-      <h1 className="text-3xl font-bold mb-2">Payment: Table {tableId.slice(0, 4)}</h1>
+      <h1 className="text-3xl font-bold mb-2">Payment: Table {tableDisplayName}</h1>
       <p className="text-gray-400 mb-6">Review order and complete payment.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

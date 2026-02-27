@@ -22,39 +22,43 @@ export default function POSDashboard() {
   const fetchTables = async (orgId: string) => {
     setLoading(true);
     
-    // Fetch Tables
     const { data: tablesData } = await supabase
       .from('tables')
       .select('*')
       .eq('org_id', orgId)
       .order('table_number', { ascending: true });
 
-    // Fetch Active Orders (Pending = Occupied, Ready = Food Ready)
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('table_id, total_price, status')
+      .select('id, table_id, total_price, status')
       .eq('org_id', orgId)
-      .in('status', ['pending', 'ready']); 
+      .in('status', ['pending', 'ready']);
 
-    // Merge data
-    const tablesWithStatus = (tablesData || []).map(table => {
+    const tablesWithStatus = (tablesData || []).map((table, index) => {
       const activeOrder = (ordersData || []).find(o => o.table_id === table.id);
       
-      let status = 'open';
-      let hasReadyFood = false;
-
-      if (activeOrder) {
-        status = 'occupied';
-        if (activeOrder.status === 'ready') {
-            hasReadyFood = true; // Food is ready!
+      // SMART DISPLAY NAME: Handle both Numbers and Text safely
+      let displayName = `Table ${index + 1}`;
+      
+      if (table.table_number) {
+        if (typeof table.table_number === 'number') {
+          // It is a number (e.g., 1, 2, 3)
+          displayName = table.table_number;
+        } else if (typeof table.table_number === 'string') {
+          // It is text
+          if (!table.table_number.includes('-')) {
+            // It is not a UUID
+            displayName = table.table_number;
+          }
         }
       }
 
       return {
         ...table,
+        displayName: displayName,
         currentBill: activeOrder?.total_price || 0,
-        status: status,
-        hasReadyFood: hasReadyFood
+        status: activeOrder ? 'occupied' : 'open',
+        hasReadyFood: activeOrder?.status === 'ready'
       };
     });
 
@@ -75,16 +79,15 @@ export default function POSDashboard() {
             key={table.id} 
             className={`p-6 rounded-xl border flex flex-col justify-between h-52 transition transform hover:scale-105 ${
               table.hasReadyFood 
-                ? 'bg-green-900/30 border-green-500 animate-pulse' // FLASHING GREEN
+                ? 'bg-green-900/30 border-green-500 animate-pulse' 
                 : table.status === 'occupied' 
                     ? 'bg-red-900/20 border-red-500' 
                     : 'bg-gray-800 border-gray-700 hover:border-orange-500'
             }`}
           >
             <div>
-              <h3 className="text-3xl font-bold">{table.table_number}</h3>
+              <h3 className="text-3xl font-bold">{table.displayName}</h3>
               
-              {/* Status Badge */}
               <span className={`text-xs mt-2 inline-block px-2 py-1 rounded ${
                   table.hasReadyFood 
                       ? 'bg-green-500 text-black font-bold' 

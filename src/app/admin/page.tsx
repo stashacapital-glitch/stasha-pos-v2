@@ -3,134 +3,208 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Users, Utensils, DollarSign, ShoppingBag, AlertTriangle } from 'lucide-react';
-import Link from 'next/link';
+import PermissionGate from '@/components/PermissionGate';
+import { Loader2, Printer, DollarSign, ShoppingCart, TrendingUp, Package } from 'lucide-react';
 
-export default function AdminDashboard() {
+export default function ReportsPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ tables: 0, items: 0, sales: 0, staff: 1 });
-  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [dateFilter, setDateFilter] = useState<'today' | 'month'>('today');
+  
+  // State for Data
+  const [salesData, setSalesData] = useState({ total: 0, count: 0, cash: 0, mpesa: 0 });
+  const [topItems, setTopItems] = useState<any[]>([]);
+  const [stockMoves, setStockMoves] = useState<any[]>([]);
 
   const supabase = createClient();
 
   useEffect(() => {
-    if (profile?.org_id) fetchData(profile.org_id);
-  }, [profile]);
+    if (profile?.org_id) fetchAllData();
+  }, [profile, dateFilter]);
 
-  const fetchData = async (orgId: string) => {
+  const getDateRange = () => {
+    const now = new Date();
+    let start = new Date();
+    
+    if (dateFilter === 'today') {
+      start.setHours(0, 0, 0, 0);
+    } else {
+      start = new Date(now.getFullYear(), now.getMonth(), 1); // First day of month
+    }
+    return { start, end: now };
+  };
+
+  const fetchAllData = async () => {
     setLoading(true);
-    
-    // 1. Count Tables
-    const { count: tablesCount } = await supabase
-      .from('tables')
-      .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId);
+    const { start, end } = getDateRange();
+    const orgId = profile?.org_id;
 
-    // 2. Count Menu Items
-    const { count: itemsCount } = await supabase
-      .from('menu_items')
-      .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId);
-
-    // 3. Calculate Sales
-    const { data: ordersData } = await supabase
+    // 1. Fetch Orders
+    const { data: orders } = await supabase
       .from('orders')
-      .select('total_price')
-      .eq('org_id', orgId);
-    
-    const totalSales = ordersData?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0;
+      .select('*')
+      .eq('org_id', orgId)
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
 
-    // 4. Fetch Low Stock Items (Stock <= Threshold)
-    const { data: items } = await supabase
-      .from('menu_items')
-      .select('id, name, emoji, stock_quantity, low_stock_threshold')
-      .eq('org_id', orgId);
+    // 2. Process Sales Data
+    if (orders) {
+      const total = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+      const cash = orders.filter(o => o.payment_method === 'cash').reduce((sum, o) => sum + (o.total_price || 0), 0);
+      const mpesa = orders.filter(o => o.payment_method === 'mpesa').reduce((sum, o) => sum + (o.total_price || 0), 0);
+      
+      setSalesData({ total, count: orders.length, cash, mpesa });
 
-    const lowItems = (items || []).filter(item => 
-        item.stock_quantity <= (item.low_stock_threshold || 10)
-    );
+      // Process Top Items (Simple aggregation from items array)
+      const itemCounts: Record<string, { name: string; qty: number }> = {};
+      orders.forEach(order => {
+        order.items?.forEach((item: any) => {
+          if (!itemCounts[item.name]) itemCounts[item.name] = { name: item.name, qty: 0 };
+          itemCounts[item.name].qty += item.quantity || 1;
+        });
+      });
+      
+      const sorted = Object.values(itemCounts).sort((a, b) => b.qty - a.qty).slice(0, 5);
+      setTopItems(sorted);
+    }
 
-    setStats({
-      tables: tablesCount || 0,
-      items: itemsCount || 0,
-      sales: totalSales,
-      staff: 1, 
-    });
-    
-    setLowStockItems(lowItems);
+    // 3. Fetch Stock Transactions
+    const { data: transactions } = await supabase
+      .from('stock_transactions')
+      .select('*, menu_items(name)')
+      .eq('org_id', orgId)
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+      .order('created_at', { ascending: false });
+
+    setStockMoves(transactions || []);
     setLoading(false);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
-      <p className="text-gray-400 mb-8">Welcome back!</p>
-
-      {/* Top Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        
-        <Link href="/admin/pos" className="block bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-blue-500">
-          <p className="text-gray-400 text-sm">Total Tables</p>
-          <p className="text-3xl font-bold mt-1">{stats.tables}</p>
-        </Link>
-
-        <Link href="/admin/menu" className="block bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-green-500">
-          <p className="text-gray-400 text-sm">Menu Items</p>
-          <p className="text-3xl font-bold mt-1">{stats.items}</p>
-        </Link>
-
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-          <p className="text-gray-400 text-sm">Total Sales</p>
-          <p className="text-3xl font-bold mt-1 text-orange-400">KES {stats.sales.toLocaleString()}</p>
+    <PermissionGate allowedRoles={['owner', 'admin']}>
+      <div className="p-8">
+        {/* Header & Filters */}
+        <div className="flex justify-between items-center mb-8 no-print">
+          <h1 className="text-3xl font-bold text-orange-400">Reports</h1>
+          <div className="flex gap-4 items-center">
+            <select 
+              value={dateFilter} 
+              onChange={(e) => setDateFilter(e.target.value as any)}
+              className="bg-gray-700 p-2 rounded text-white"
+            >
+              <option value="today">Today</option>
+              <option value="month">This Month</option>
+            </select>
+            <button onClick={handlePrint} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+              <Printer size={18} /> Print Report
+            </button>
+          </div>
         </div>
 
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-          <p className="text-gray-400 text-sm">Staff</p>
-          <p className="text-3xl font-bold mt-1">{stats.staff}</p>
+        {/* Sales Dashboard */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 text-sm">Total Revenue</p>
+              <DollarSign className="text-green-400" />
+            </div>
+            <h2 className="text-3xl font-bold mt-2">KES {salesData.total.toLocaleString()}</h2>
+          </div>
+          
+          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 text-sm">Total Orders</p>
+              <ShoppingCart className="text-blue-400" />
+            </div>
+            <h2 className="text-3xl font-bold mt-2">{salesData.count}</h2>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 text-sm">Cash Sales</p>
+              <TrendingUp className="text-yellow-400" />
+            </div>
+            <h2 className="text-2xl font-bold mt-2">KES {salesData.cash.toLocaleString()}</h2>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 text-sm">M-Pesa/Card</p>
+              <TrendingUp className="text-purple-400" />
+            </div>
+            <h2 className="text-2xl font-bold mt-2">KES {salesData.mpesa.toLocaleString()}</h2>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* Top Selling Items */}
+          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 lg:col-span-1">
+            <h3 className="text-xl font-bold mb-4">Top Selling Items</h3>
+            <ul className="space-y-3">
+              {topItems.map((item, idx) => (
+                <li key={idx} className="flex justify-between items-center bg-gray-700 p-3 rounded">
+                  <span>{item.name}</span>
+                  <span className="font-bold text-orange-400">{item.qty} sold</span>
+                </li>
+              ))}
+              {topItems.length === 0 && <p className="text-gray-500 text-center py-4">No sales data yet.</p>}
+            </ul>
+          </div>
+
+          {/* Stock Movement Report */}
+          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 lg:col-span-2">
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Package size={20} /> Stock Movement
+            </h3>
+            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-gray-800">
+                  <tr className="border-b border-gray-600 text-left">
+                    <th className="p-2">Date</th>
+                    <th className="p-2">Item</th>
+                    <th className="p-2">Type</th>
+                    <th className="p-2">Qty</th>
+                    <th className="p-2">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockMoves.map((tx) => (
+                    <tr key={tx.id} className="border-b border-gray-700">
+                      <td className="p-2 text-gray-400">{new Date(tx.created_at).toLocaleDateString()}</td>
+                      <td className="p-2">{tx.menu_items?.name || 'Unknown'}</td>
+                      <td className="p-2">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          tx.transaction_type === 'purchase' ? 'bg-blue-900 text-blue-300' :
+                          tx.transaction_type === 'sale' ? 'bg-orange-900 text-orange-300' :
+                          tx.transaction_type === 'return' ? 'bg-green-900 text-green-300' :
+                          'bg-red-900 text-red-300'
+                        }`}>
+                          {tx.transaction_type}
+                        </span>
+                      </td>
+                      <td className={`p-2 font-bold ${tx.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {tx.quantity > 0 ? `+${tx.quantity}` : tx.quantity}
+                      </td>
+                      <td className="p-2 text-gray-400">{tx.note || '-'}</td>
+                    </tr>
+                  ))}
+                  {stockMoves.length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-4 text-gray-500">No stock movements recorded.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
       </div>
-
-      {/* Low Stock Alert Section */}
-      {lowStockItems.length > 0 && (
-        <div className="bg-red-900/20 border border-red-500 p-6 rounded-xl mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <AlertTriangle className="text-red-500" size={24} />
-            <h2 className="text-xl font-bold text-red-400">Low Stock Alert ({lowStockItems.length})</h2>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {lowStockItems.map(item => (
-              <div key={item.id} className="bg-gray-800 p-3 rounded border border-gray-700 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold">{item.emoji} {item.name}</span>
-                  <span className="text-red-400 font-mono">{item.stock_quantity}</span>
-                </div>
-                <p className="text-gray-500 text-xs mt-1">Min: {item.low_stock_threshold || 10}</p>
-              </div>
-            ))}
-          </div>
-          
-          <Link href="/admin/menu" className="mt-4 inline-block text-sm text-white underline hover:text-orange-400">
-            Manage Inventory →
-          </Link>
-        </div>
-      )}
-
-      {/* Quick Actions */}
-      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-        <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Link href="/admin/pos" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Open POS</Link>
-          <Link href="/admin/menu" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Menu</Link>
-          <Link href="/admin/kitchen" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Kitchen</Link>
-          <Link href="/admin/settings" className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-center">Settings</Link>
-        </div>
-      </div>
-
-    </div>
+    </PermissionGate>
   );
 }
