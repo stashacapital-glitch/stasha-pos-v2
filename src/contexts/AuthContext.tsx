@@ -4,7 +4,8 @@ import { createClient } from '@/utils/supabase';
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 
 // 1. Define strict types based on your DB schema
-type Role = 'owner' | 'admin' | 'barman' | 'waiter' | null;
+// UPDATED: Added kitchen_master and room_keeper
+type Role = 'owner' | 'admin' | 'barman' | 'waiter' | 'kitchen_master' | 'room_keeper' | null;
 
 // Using 'any' for Profile/Organization if you haven't generated types yet, 
 // but strictly typing Role is already a big improvement.
@@ -68,7 +69,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getSession();
 
-    // FIX: Added explicit types for event and session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, session: Session | null) => {
         setUser(session?.user ?? null);
