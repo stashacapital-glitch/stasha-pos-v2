@@ -23,9 +23,10 @@ export default function TeamManagementPage() {
     if (!profile?.org_id) return;
     setLoading(true);
     
+    // UPDATED: Added full_name to the query
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, role, created_at')
+      .select('id, email, role, created_at, full_name')
       .eq('org_id', profile.org_id);
 
     if (error) toast.error('Failed to fetch team');
@@ -112,6 +113,8 @@ export default function TeamManagementPage() {
         <table className="w-full text-left">
           <thead className="bg-gray-900 text-gray-400 border-b border-gray-700">
             <tr>
+              {/* ADDED: Name Column */}
+              <th className="p-4">Name</th>
               <th className="p-4">Email</th>
               <th className="p-4">Role</th>
               <th className="p-4">Joined</th>
@@ -121,6 +124,10 @@ export default function TeamManagementPage() {
           <tbody className="divide-y divide-gray-700">
             {team.map((member) => (
               <tr key={member.id} className="hover:bg-gray-700/50">
+                {/* ADDED: Name Display */}
+                <td className="p-4 font-medium">
+                    {member.full_name || <span className="text-gray-500 italic">No name set</span>}
+                </td>
                 <td className="p-4">{member.email}</td>
                 <td className="p-4">
                   <span className={`px-2 py-1 rounded text-xs font-bold ${
