@@ -1,7 +1,7 @@
  "use client";
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase';
-import { Session, User } from '@supabase/supabase-js';
+import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 
 // 1. Define strict types based on your DB schema
 type Role = 'owner' | 'admin' | 'barman' | 'waiter' | null;
@@ -26,7 +26,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [organization, setOrganization] = useState<any | null>(null);
   const [role, setRole] = useState<Role>(null);
   
-  // CORRECTED LINE BELOW:
   const [loading, setLoading] = useState(true);
   
   const supabase = createClient();
@@ -69,8 +68,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getSession();
 
+    // FIX: Added explicit types for event and session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (_event: AuthChangeEvent, session: Session | null) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           getProfileAndOrg(session.user.id);
