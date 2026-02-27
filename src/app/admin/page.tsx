@@ -49,16 +49,16 @@ export default function ReportsPage() {
 
     // 2. Process Sales Data
     if (orders) {
-      // FIX: Added ': number' type annotation to 'sum' parameter
-      const total = orders.reduce((sum: number, o) => sum + (o.total_price || 0), 0);
-      const cash = orders.filter(o => o.payment_method === 'cash').reduce((sum: number, o) => sum + (o.total_price || 0), 0);
-      const mpesa = orders.filter(o => o.payment_method === 'mpesa').reduce((sum: number, o) => sum + (o.total_price || 0), 0);
+      // FIX: Added ': any' to order parameter 'o'
+      const total = orders.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
+      const cash = orders.filter((o: any) => o.payment_method === 'cash').reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
+      const mpesa = orders.filter((o: any) => o.payment_method === 'mpesa').reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
       
       setSalesData({ total, count: orders.length, cash, mpesa });
 
       // Process Top Items (Simple aggregation from items array)
       const itemCounts: Record<string, { name: string; qty: number }> = {};
-      orders.forEach(order => {
+      orders.forEach((order: any) => {
         order.items?.forEach((item: any) => {
           if (!itemCounts[item.name]) itemCounts[item.name] = { name: item.name, qty: 0 };
           itemCounts[item.name].qty += item.quantity || 1;
