@@ -85,6 +85,11 @@ export default function TeamManagementPage() {
     }
   };
 
+  // Helper to format role name for display
+  const formatRole = (roleName: string) => {
+    return roleName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   return (
@@ -122,9 +127,11 @@ export default function TeamManagementPage() {
                     member.role === 'owner' ? 'bg-purple-900 text-purple-300' :
                     member.role === 'admin' ? 'bg-blue-900 text-blue-300' :
                     member.role === 'barman' ? 'bg-green-900 text-green-300' :
+                    member.role === 'kitchen_master' ? 'bg-yellow-900 text-yellow-300' :
+                    member.role === 'room_keeper' ? 'bg-teal-900 text-teal-300' :
                     'bg-gray-600 text-gray-300'
                   }`}>
-                    {member.role}
+                    {formatRole(member.role)}
                   </span>
                 </td>
                 <td className="p-4 text-gray-400 text-sm">
@@ -173,6 +180,8 @@ export default function TeamManagementPage() {
                   <option value="admin">Admin</option>
                   <option value="barman">Barman</option>
                   <option value="waiter">Waiter</option>
+                  <option value="kitchen_master">Kitchen Master</option>
+                  <option value="room_keeper">Room Keeper</option>
                 </select>
               </div>
               <div className="flex gap-3">
