@@ -8,45 +8,60 @@ export async function POST(request: Request) {
   );
 
   try {
-    // ADDED: full_name to the request body
-    const { email, role, org_id, full_name } = await request.json();
+    const { email, password, role, org_id, full_name } = await request.json();
 
-    if (!email || !role || !org_id) {
+    if (!email || !password || !role || !org_id) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Check if user already exists
+    // 1. Check if user exists
     const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
     if (listError) throw listError;
 
     const existingUser = users.find(u => u.email === email);
 
     if (existingUser) {
-      // 2A. User exists: Update their profile
-      const { error: updateError } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
-        .update({ org_id, role, full_name: full_name || null }) // Update name too
-        .eq('id', existingUser.id);
+        .upsert({ id: existingUser.id, org_id, role, full_name, email });
 
-      if (updateError) throw updateError;
-      return NextResponse.json({ message: 'User added to organization successfully!' });
-
+      if (profileError) throw profileError;
+      
+      // Return data for the modal
+      return NextResponse.json({ 
+        message: 'User updated!', 
+        user: { email, password, full_name, role, isNew: false } 
+      });
     } else {
-      // 2B. New user: Send invite with name in metadata
-      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: {
-          org_id,
-          role,
-          full_name // Passed to metadata so the trigger can use it
-        }
+      // Create new user
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { org_id, role, full_name }
       });
 
-      if (inviteError) throw inviteError;
-      return NextResponse.json({ message: 'Invitation sent successfully!' });
+      if (authError) throw authError;
+
+      if (authData.user) {
+        await supabase.from('profiles').upsert({
+          id: authData.user.id,
+          org_id,
+          role,
+          full_name,
+          email
+        });
+      }
+
+      // Return data for the modal
+      return NextResponse.json({ 
+        message: 'User created!', 
+        user: { email, password, full_name, role, isNew: true } 
+      });
     }
 
   } catch (error: any) {
-    console.error('Team Invite Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    console.error('Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
