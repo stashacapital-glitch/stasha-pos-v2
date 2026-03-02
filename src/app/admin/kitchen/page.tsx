@@ -1,183 +1,160 @@
  'use client';
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@/utils/supabase';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, CheckCircle, Beer, ChefHat } from 'lucide-react';
+import { createClient } from '@/utils/supabase';
+import { Loader2, CheckCircle, Beer, UtensilsCrossed, Clock } from 'lucide-react';
+import PermissionGate from '@/components/PermissionGate';
 import toast from 'react-hot-toast';
 
-export default function KitchenPage() {
+export default function KitchenDisplay() {
   const { profile } = useAuth();
-  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [metaData, setMetaData] = useState<{tables: any[], rooms: any[]}>({ tables: [], rooms: [] });
 
   const supabase = createClient();
 
   useEffect(() => {
     if (profile?.org_id) {
-      fetchOrders(profile.org_id);
+      loadData();
+      const channel = supabase.channel('kitchen-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => loadData()).subscribe();
+      return () => { supabase.removeChannel(channel); };
     }
   }, [profile]);
 
-  const fetchOrders = async (orgId: string) => {
-    setLoading(true);
-    
-    // We still fetch orders, but we will filter them in the UI based on the new columns
-    const { data } = await supabase
-      .from('orders')
-      .select('*, tables(table_number)')
-      .eq('org_id', orgId)
-      .in('status', ['pending', 'ready']) // Main order must be active
-      .order('created_at', { ascending: true });
-    
-    setOrders(data || []);
+  const loadData = async () => {
+    const [ordersRes, tablesRes, roomsRes] = await Promise.all([
+      supabase.from('orders').select('*').eq('org_id', profile?.org_id).in('status', ['pending', 'ready']).order('created_at', { ascending: true }),
+      supabase.from('tables').select('id, table_number').eq('org_id', profile?.org_id),
+      supabase.from('rooms').select('id, room_number').eq('org_id', profile?.org_id)
+    ]);
+    if (ordersRes.data) setOrders(ordersRes.data);
+    if (tablesRes.data && roomsRes.data) setMetaData({ tables: tablesRes.data, rooms: roomsRes.data });
     setLoading(false);
   };
 
-  // FIX: Update ONLY the Kitchen Status
-  const handleKitchenReady = async (orderId: string) => {
+  // NEW LOGIC: Mark specific items as ready
+  const handleItemReady = async (order: any, categories: string[]) => {
+    // 1. Clone items
+    const updatedItems = order.items.map((item: any) => {
+      if (categories.includes(item.category) && item.status !== 'ready') {
+        return { ...item, status: 'ready' };
+      }
+      return item;
+    });
+
+    // 2. Check if ALL items in the order are ready
+    const allItemsReady = updatedItems.every((item: any) => item.status === 'ready');
+
+    // 3. Update Order
     const { error } = await supabase
       .from('orders')
-      .update({ kitchen_status: 'ready' }) 
-      .eq('id', orderId);
+      .update({ 
+        items: updatedItems, 
+        // If all items are ready, set main status to ready. Otherwise keep pending.
+        status: allItemsReady ? 'ready' : 'pending' 
+      })
+      .eq('id', order.id);
 
-    if (!error) {
-      toast.success('Kitchen marked Ready!');
-      fetchOrders(profile?.org_id);
-    } else {
-      toast.error("Error updating");
+    if (error) toast.error('Update failed');
+    else {
+      toast.success('Marked as Ready!');
+      loadData();
     }
   };
 
-  // FIX: Update ONLY the Bar Status
-  const handleBarReady = async (orderId: string) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ bar_status: 'ready' }) 
-      .eq('id', orderId);
+  const kitchenCategories = ['food'];
+  const barCategories = ['bar', 'drinks', 'soft_drink', 'beer', 'cigarettes'];
 
-    if (!error) {
-      toast.success('Bar marked Ready!');
-      fetchOrders(profile?.org_id);
-    } else {
-      toast.error("Error updating");
-    }
-  };
+  const hasAnyCategory = (order: any, categories: string[]) => order.items?.some((item: any) => categories.includes(item.category));
+  
+  // Filter orders that have AT LEAST ONE pending item for this station
+  const kitchenOrders = useMemo(() => orders.filter(o => o.items?.some((i: any) => kitchenCategories.includes(i.category) && i.status !== 'ready')), [orders]);
+  const barOrders = useMemo(() => orders.filter(o => o.items?.some((i: any) => barCategories.includes(i.category) && i.status !== 'ready')), [orders]);
 
-  // Helper to filter items
-  const getItemsByType = (items: any[], isKitchen: boolean) => {
-    return items.filter(item => item.is_kitchen_item === isKitchen);
-  };
+  const getTableName = (id: string) => metaData.tables.find(t => t.id === id)?.table_number || id.slice(0,4);
+  const getRoomName = (id: string) => metaData.rooms.find(r => r.id === id)?.room_number || id.slice(0,4);
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6">Kitchen & Bar Display</h1>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* BAR STATION */}
-        <div className="bg-gray-800 p-4 rounded-xl border border-yellow-500">
-          <div className="flex items-center gap-2 border-b border-gray-700 pb-3 mb-4">
-            <Beer className="text-yellow-400" size={24} />
-            <h2 className="text-xl font-bold text-yellow-400">Bar Station</h2>
-          </div>
-
-          {orders.map(order => {
-            const barItems = getItemsByType(order.items, false); // isKitchen=false
-            if (barItems.length === 0) return null; // Skip if no bar items
-
-            // Check status from the NEW column
-            const isReady = order.bar_status === 'ready';
-
-            return (
-              <div key={order.id} className={`p-4 rounded mb-4 border-l-4 ${isReady ? 'bg-green-900/30 border-green-500' : 'bg-gray-700 border-transparent'}`}>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-lg">Table {order.tables?.table_number}</span>
-                  <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleTimeString()}</span>
-                </div>
-                
-                <ul className="space-y-1 mb-3 text-sm">
-                  {barItems.map((item: any, idx: number) => (
-                    <li key={idx} className="flex justify-between">
-                      <span>{item.quantity}x {item.name}</span>
-                      <span>{item.emoji}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {!isReady ? (
-                  <button 
-                    onClick={() => handleBarReady(order.id)} 
-                    className="w-full bg-yellow-500 text-black font-bold py-1 rounded text-sm hover:bg-yellow-400"
-                  >
-                    Mark Ready
-                  </button>
-                ) : (
-                  <div className="text-center text-green-400 font-bold text-sm animate-pulse">
-                    READY FOR PICKUP
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {orders.every(o => getItemsByType(o.items, false).length === 0) && (
-            <p className="text-gray-500 text-center py-8">No bar orders</p>
-          )}
+    <PermissionGate allowedRoles={['owner', 'admin', 'kitchen_master', 'barman']}>
+      <div className="p-8 h-screen flex flex-col">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-orange-400">Kitchen / Bar Display</h1>
+          <div className="text-sm text-gray-400 flex items-center gap-2"><Clock size={16} /> Live</div>
         </div>
 
-        {/* KITCHEN STATION */}
-        <div className="bg-gray-800 p-4 rounded-xl border border-orange-500">
-          <div className="flex items-center gap-2 border-b border-gray-700 pb-3 mb-4">
-            <ChefHat className="text-orange-400" size={24} />
-            <h2 className="text-xl font-bold text-orange-400">Kitchen Station</h2>
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-hidden">
+          
+          {/* KITCHEN COLUMN */}
+          <div className="flex flex-col bg-gray-900 rounded-xl p-4 overflow-hidden">
+            <div className="flex items-center gap-3 mb-4 border-b border-gray-700 pb-3">
+              <div className="p-2 bg-orange-900 rounded"><UtensilsCrossed className="text-orange-400" size={20} /></div>
+              <h2 className="text-xl font-bold">Kitchen Orders</h2>
+              <span className="bg-orange-600 text-white text-xs px-2 py-1 rounded-full">{kitchenOrders.length}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+              {kitchenOrders.length === 0 ? (<div className="text-center text-gray-500 mt-10">No food orders pending</div>) : (
+                kitchenOrders.map((order) => (
+                  <OrderCard key={order.id} order={order} categories={kitchenCategories} label={order.table_id ? `Table ${getTableName(order.table_id)}` : `Room ${getRoomName(order.room_id)}`} onUpdate={handleItemReady} />
+                ))
+              )}
+            </div>
           </div>
 
-          {orders.map(order => {
-            const kitchenItems = getItemsByType(order.items, true); // isKitchen=true
-            if (kitchenItems.length === 0) return null;
+          {/* BAR COLUMN */}
+          <div className="flex flex-col bg-gray-900 rounded-xl p-4 overflow-hidden border-l border-gray-700">
+            <div className="flex items-center gap-3 mb-4 border-b border-gray-700 pb-3">
+              <div className="p-2 bg-blue-900 rounded"><Beer className="text-blue-400" size={20} /></div>
+              <h2 className="text-xl font-bold">Bar Orders</h2>
+              <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">{barOrders.length}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+              {barOrders.length === 0 ? (<div className="text-center text-gray-500 mt-10">No drink orders pending</div>) : (
+                barOrders.map((order) => (
+                  <OrderCard key={order.id} order={order} categories={barCategories} label={order.table_id ? `Table ${getTableName(order.table_id)}` : `Room ${getRoomName(order.room_id)}`} onUpdate={handleItemReady} />
+                ))
+              )}
+            </div>
+          </div>
 
-            // Check status from the NEW column
-            const isReady = order.kitchen_status === 'ready';
-
-            return (
-              <div key={order.id} className={`p-4 rounded mb-4 border-l-4 ${isReady ? 'bg-green-900/30 border-green-500' : 'bg-gray-700 border-transparent'}`}>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-lg">Table {order.tables?.table_number}</span>
-                  <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleTimeString()}</span>
-                </div>
-                
-                <ul className="space-y-1 mb-3 text-sm">
-                  {kitchenItems.map((item: any, idx: number) => (
-                    <li key={idx} className="flex justify-between">
-                      <span>{item.quantity}x {item.name}</span>
-                      <span>{item.emoji}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {!isReady ? (
-                  <button 
-                    onClick={() => handleKitchenReady(order.id)} 
-                    className="w-full bg-orange-500 text-black font-bold py-1 rounded text-sm hover:bg-orange-400"
-                  >
-                    Mark Ready
-                  </button>
-                ) : (
-                  <div className="text-center text-green-400 font-bold text-sm animate-pulse">
-                    READY FOR PICKUP
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {orders.every(o => getItemsByType(o.items, true).length === 0) && (
-            <p className="text-gray-500 text-center py-8">No kitchen orders</p>
-          )}
         </div>
-
       </div>
+    </PermissionGate>
+  );
+}
+
+// SUB-COMPONENT
+function OrderCard({ order, categories, label, onUpdate }: { order: any, categories: string[], label: string, onUpdate: (order: any, categories: string[]) => void }) {
+  // Filter items for this station that are NOT ready yet
+  const pendingItems = order.items?.filter((item: any) => categories.includes(item.category) && item.status !== 'ready');
+
+  if (!pendingItems || pendingItems.length === 0) return null;
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-yellow-500">
+      <div className="flex justify-between items-center mb-3">
+        <div>
+          <h3 className="font-bold text-lg text-orange-300">{label}</h3>
+          <p className="text-xs text-gray-400">{new Date(order.created_at).toLocaleTimeString()}</p>
+        </div>
+        <span className="px-2 py-1 rounded text-xs font-bold bg-yellow-600 text-white">PENDING</span>
+      </div>
+
+      <div className="space-y-2 mb-4">
+        {pendingItems.map((item: any, idx: number) => (
+          <div key={idx} className="flex justify-between items-center bg-gray-700 p-2 rounded text-sm">
+            <span className="font-bold text-orange-400">{item.quantity}x</span>
+            <span className="flex-1 ml-3">{item.name}</span>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={() => onUpdate(order, categories)} className="w-full py-2 bg-green-600 text-white rounded font-bold text-sm hover:bg-green-500 flex items-center justify-center gap-2">
+        <CheckCircle size={16} /> Mark Ready
+      </button>
     </div>
   );
 }

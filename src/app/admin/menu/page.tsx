@@ -1,291 +1,229 @@
  'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Plus, Trash2, Edit2, Check, X, Power } from 'lucide-react';
+import { createClient } from '@/utils/supabase';
+import { Loader2, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function MenuManager() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
   
-  const [newCategory, setNewCategory] = useState('');
-  const [newCategoryKitchen, setNewCategoryKitchen] = useState(true); // Default true for new cats
-  const [newItem, setNewItem] = useState({ 
-    name: '', price: '', category_id: '', stock: '0', lowThreshold: '10', emoji: '🍽️', isKitchenItem: true 
-  });
-
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [editingCategoryName, setEditingCategoryName] = useState('');
-  const [editingCategoryKitchen, setEditingCategoryKitchen] = useState(true);
+  // Form State
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [category, setCategory] = useState('food'); // Default
+  const [submitting, setSubmitting] = useState(false);
 
   const supabase = createClient();
 
-  useEffect(() => {
-    if (profile?.org_id) fetchData();
-  }, [profile]);
+  useEffect(() => { if (profile?.org_id) fetchItems(); }, [profile]);
 
-  const fetchData = async () => {
+  const fetchItems = async () => {
     setLoading(true);
-    const orgId = profile?.org_id;
-    
-    const { data: cats } = await supabase.from('categories').select('*').eq('org_id', orgId).order('name');
-    setCategories(cats || []);
+    const { data } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('org_id', profile?.org_id)
+      .order('category', { ascending: true });
 
-    const { data: items } = await supabase.from('menu_items').select('*, categories(name)').eq('org_id', orgId).order('name');
-    setMenuItems(items || []);
-
+    setItems(data || []);
     setLoading(false);
   };
 
-  // --- Category Actions ---
-  const handleAddCategory = async () => {
-    if (!newCategory || !profile?.org_id) return;
-    const { error } = await supabase.from('categories').insert({ 
-      org_id: profile.org_id, 
-      name: newCategory,
-      is_kitchen: newCategoryKitchen 
-    });
-    if (error) toast.error('Error: ' + error.message);
-    else { toast.success('Category added!'); setNewCategory(''); setNewCategoryKitchen(true); fetchData(); }
+  const openModal = (item?: any) => {
+    if (item) {
+      setEditing(item);
+      setName(item.name);
+      setPrice(String(item.price || 0));
+      setCategory(item.category || 'food');
+    } else {
+      setEditing(null); setName(''); setPrice(''); setCategory('food');
+    }
+    setShowModal(true);
   };
 
-  const handleUpdateCategory = async (id: string) => {
-    if (!editingCategoryName) return;
-    const { error } = await supabase.from('categories').update({ 
-      name: editingCategoryName,
-      is_kitchen: editingCategoryKitchen 
-    }).eq('id', id);
-    if (error) toast.error('Error updating');
-    else { toast.success('Category updated'); setEditingCategoryId(null); fetchData(); }
-  };
+  const handleSave = async () => {
+    if (!name || !price) { toast.error("Name and Price required"); return; }
+    
+    const payload = { 
+      name, 
+      price: Number(price), 
+      category, 
+      org_id: profile?.org_id,
+      is_available: true 
+    };
 
-  const handleDeleteCategory = async (id: string) => {
-    if(!confirm("Delete this category?")) return;
-    const { error } = await supabase.from('categories').delete().eq('id', id);
-    if (error) toast.error('Error deleting');
-    else { toast.success('Category deleted'); fetchData(); }
-  };
-
-  // --- Item Actions ---
-  const handleAddItem = async () => {
-    if (!newItem.name || !newItem.price || !newItem.category_id) {
-      toast.error('Fill Name, Price, and Category');
-      return;
+    setSubmitting(true);
+    let error;
+    if (editing) {
+      const res = await supabase.from('menu_items').update(payload).eq('id', editing.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('menu_items').insert(payload);
+      error = res.error;
     }
 
-    // LOGIC: Determine is_kitchen_item based on selected category
-    const selectedCategory = categories.find(c => c.id === newItem.category_id);
-    const finalIsKitchen = selectedCategory?.is_kitchen ?? true;
-
-    const openingStock = parseInt(newItem.stock) || 0;
-
-    const { data: insertedItem, error } = await supabase
-      .from('menu_items')
-      .insert({
-        org_id: profile?.org_id,
-        name: newItem.name,
-        price_kes: parseInt(newItem.price),
-        category_id: newItem.category_id,
-        stock_quantity: openingStock,
-        low_stock_threshold: parseInt(newItem.lowThreshold) || 10,
-        emoji: newItem.emoji || '🍽️',
-        available: true,
-        is_kitchen_item: finalIsKitchen // Set based on category
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      toast.error('Error: ' + error.message);
-      return;
+    if (error) toast.error(error.message);
+    else {
+      toast.success(`Item ${editing ? 'updated' : 'added'}`);
+      setShowModal(false);
+      fetchItems();
     }
-
-    if (insertedItem && openingStock > 0) {
-        await supabase.from('stock_transactions').insert({
-          org_id: profile?.org_id,
-          menu_item_id: insertedItem.id,
-          quantity: openingStock,
-          transaction_type: 'purchase',
-          note: 'Initial Stock Entry'
-        });
-    }
-
-    toast.success('Item added!');
-    setNewItem({ name: '', price: '', category_id: '', stock: '0', lowThreshold: '10', emoji: '🍽️', isKitchenItem: true });
-    fetchData();
+    setSubmitting(false);
   };
 
-  const toggleAvailability = async (id: string, currentState: boolean) => {
-    const { error } = await supabase.from('menu_items').update({ available: !currentState }).eq('id', id);
-    if (error) toast.error('Failed to update');
-    else fetchData();
-  };
-
-  const deleteItem = async (id: string) => {
+  const handleDelete = async (id: string) => {
     if(!confirm("Delete this item?")) return;
     const { error } = await supabase.from('menu_items').delete().eq('id', id);
-    if (error) toast.error('Failed to delete');
-    else { toast.success('Item deleted'); fetchData(); }
+    if(error) toast.error(error.message);
+    else {
+      toast.success('Deleted');
+      fetchItems();
+    }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
+  // Filter items by search
+  const filteredItems = items.filter(item => 
+    item.name.toLowerCase().includes(search.toLowerCase()) ||
+    item.category?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold text-orange-400 mb-6">Menu Manager</h1>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Categories */}
-        <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-          <h2 className="text-xl font-bold mb-4">Categories</h2>
-          
-          {/* Add New Category */}
-          <div className="mb-4 space-y-2">
+      <div className="flex flex-col md:flex-row justify-between mb-8 gap-4">
+        <h1 className="text-3xl font-bold text-orange-400">Menu Manager</h1>
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 text-gray-400" size={18} />
             <input 
-              value={newCategory} 
-              onChange={(e) => setNewCategory(e.target.value)} 
-              placeholder="New Category (e.g. Beverages)" 
-              className="w-full p-2 bg-gray-700 rounded text-white text-sm"
+              type="text" 
+              placeholder="Search menu..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded w-full"
             />
-            <label className="flex items-center gap-2 text-xs text-gray-400">
-              <input 
-                type="checkbox" 
-                checked={newCategoryKitchen} 
-                onChange={(e) => setNewCategoryKitchen(e.target.checked)} 
-                className="w-4 h-4 accent-orange-500"
-              />
-              Sends to Kitchen?
-            </label>
-            <button onClick={handleAddCategory} className="w-full bg-orange-500 p-2 rounded text-black text-sm font-bold"><Plus size={18} className="inline mr-2"/>Add Category</button>
           </div>
-
-          <ul className="space-y-2 text-sm">
-              {categories.map(c => (
-                <li key={c.id} className="bg-gray-700 p-2 rounded flex justify-between items-center">
-                  {editingCategoryId === c.id ? (
-                    <div className="flex flex-col gap-2 w-full">
-                      <input 
-                        value={editingCategoryName} 
-                        onChange={(e) => setEditingCategoryName(e.target.value)} 
-                        className="bg-gray-600 p-1 rounded w-full"
-                      />
-                      <label className="flex items-center gap-1 text-xs">
-                         <input 
-                           type="checkbox" 
-                           checked={editingCategoryKitchen} 
-                           onChange={(e) => setEditingCategoryKitchen(e.target.checked)} 
-                           className="w-3 h-3"
-                         />
-                         Kitchen?
-                       </label>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleUpdateCategory(c.id)} className="text-green-400 p-1 flex-1 border border-green-400 rounded text-xs">Save</button>
-                        <button onClick={() => setEditingCategoryId(null)} className="text-gray-400 p-1 flex-1 border border-gray-600 rounded text-xs">Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <span>{c.name}</span>
-                        <span className={`ml-2 text-xs px-1 rounded ${c.is_kitchen ? 'bg-blue-900 text-blue-300' : 'bg-pink-900 text-pink-300'}`}>
-                          {c.is_kitchen ? 'Kitchen' : 'Bar'}
-                        </span>
-                      </div>
-                      <div className="flex gap-1">
-                        <button onClick={() => { 
-                          setEditingCategoryId(c.id); 
-                          setEditingCategoryName(c.name);
-                          setEditingCategoryKitchen(c.is_kitchen ?? true);
-                        }} className="text-gray-400 hover:text-white p-1"><Edit2 size={14}/></button>
-                        <button onClick={() => handleDeleteCategory(c.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={14}/></button>
-                      </div>
-                    </>
-                  )}
-                </li>
-              ))}
-          </ul>
+          <button onClick={() => openModal()} className="bg-orange-500 text-black px-4 py-2 rounded font-bold flex gap-2 items-center hover:bg-orange-400">
+            <Plus size={18} /> Add Item
+          </button>
         </div>
-
-        {/* Add Item */}
-        <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-          <h2 className="text-xl font-bold mb-4">Add New Item</h2>
-          <div className="space-y-3">
-            <select 
-              value={newItem.category_id}
-              onChange={(e) => {
-                const catId = e.target.value;
-                const cat = categories.find(c => c.id === catId);
-                setNewItem({...newItem, category_id: catId, isKitchenItem: cat?.is_kitchen ?? true});
-              }}
-              className="w-full p-2 bg-gray-700 rounded text-sm"
-            >
-              <option value="">Select Category</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name} ({c.is_kitchen ? 'Kitchen' : 'Bar'})</option>)}
-            </select>
-            <input 
-              value={newItem.name}
-              onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-              placeholder="Item Name"
-              className="w-full p-2 bg-gray-700 rounded text-sm"
-            />
-            
-            <div className="flex gap-2">
-                <input type="number" value={newItem.price} onChange={(e) => setNewItem({...newItem, price: e.target.value})} placeholder="Price" className="flex-1 p-2 bg-gray-700 rounded text-sm" />
-                <input value={newItem.emoji} onChange={(e) => setNewItem({...newItem, emoji: e.target.value})} className="w-16 p-2 bg-gray-700 rounded text-center text-sm" />
-            </div>
-
-             <div className="flex gap-2">
-                <input type="number" value={newItem.stock} onChange={(e) => setNewItem({...newItem, stock: e.target.value})} placeholder="Stock" className="flex-1 p-2 bg-gray-700 rounded text-sm" />
-                <input type="number" value={newItem.lowThreshold} onChange={(e) => setNewItem({...newItem, lowThreshold: e.target.value})} placeholder="Low Limit" className="flex-1 p-2 bg-gray-700 rounded text-sm" />
-             </div>
-
-            <div className="bg-gray-700 p-2 rounded text-xs text-gray-400">
-                This item will be sent to: <span className="font-bold text-white">{newItem.isKitchenItem ? 'Kitchen' : 'Bar'}</span>
-                <br/>
-                <span className="text-gray-500">(Inherited from category)</span>
-            </div>
-
-            <button onClick={handleAddItem} className="w-full bg-green-600 p-2 rounded font-bold hover:bg-green-500 text-sm mt-2">
-              Add Item
-            </button>
-          </div>
-        </div>
-
-        {/* Menu List */}
-        <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-          <h2 className="text-xl font-bold mb-4">Current Menu ({menuItems.length})</h2>
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {menuItems.map(item => (
-              <div key={item.id} className="bg-gray-700 p-3 rounded flex justify-between items-center text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{item.emoji}</span>
-                  <div>
-                    <p className="font-bold">{item.name}</p>
-                    <p className="text-xs text-gray-400">
-                        KES {item.price_kes} | Stock: {item.stock_quantity || 0} | 
-                        <span className={item.is_kitchen_item ? 'text-blue-400 ml-1' : 'text-pink-400 ml-1'}>
-                            {item.is_kitchen_item ? 'Kitchen' : 'Bar'}
-                        </span>
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                   <button onClick={() => toggleAvailability(item.id, item.available)} className={`p-1 rounded text-xs font-bold ${item.available ? 'bg-green-500 text-black' : 'bg-gray-500 text-white'}`}>
-                     <Power size={14}/>
-                   </button>
-                   <button onClick={() => deleteItem(item.id)} className="p-1 bg-red-600 rounded text-xs hover:bg-red-500"><Trash2 size={14}/></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
       </div>
+
+      <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-900 border-b border-gray-700 text-gray-400 sticky top-0">
+            <tr>
+              <th className="p-4">Name</th>
+              <th className="p-4">Category</th>
+              <th className="p-4">Price</th>
+              <th className="p-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700">
+            {filteredItems.map(item => (
+              <tr key={item.id} className="hover:bg-gray-700/50">
+                <td className="p-4 font-medium">{item.name}</td>
+                <td className="p-4">
+                  <span className={`text-xs px-2 py-1 rounded font-bold ${
+                    item.category === 'food' ? 'bg-orange-900 text-orange-300' :
+                    item.category === 'beer' ? 'bg-yellow-900 text-yellow-300' :
+                    item.category === 'spirits' || item.category === 'whiskies' || item.category === 'tots' ? 'bg-blue-900 text-blue-300' :
+                    item.category === 'wine' ? 'bg-red-900 text-red-300' :
+                    'bg-gray-600 text-gray-300'
+                  }`}>
+                    {item.category?.toUpperCase()}
+                  </span>
+                </td>
+                <td className="p-4 font-mono text-green-400">KES {Number(item.price || 0).toLocaleString()}</td>
+                <td className="p-4 text-right">
+                  <button onClick={() => openModal(item)} className="text-blue-400 hover:text-blue-300 mr-3"><Pencil size={16} /></button>
+                  <button onClick={() => handleDelete(item.id)} className="text-red-400 hover:text-red-300"><Trash2 size={16} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md border border-gray-700">
+            <h2 className="text-xl font-bold mb-6">{editing ? 'Edit Item' : 'Add New Item'}</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Item Name</label>
+                <input 
+                  value={name} 
+                  onChange={e => setName(e.target.value)} 
+                  className="w-full p-3 bg-gray-700 rounded border border-gray-600" 
+                  placeholder="e.g. Pilsner"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Price (KES)</label>
+                <input 
+                  type="number"
+                  value={price} 
+                  onChange={e => setPrice(e.target.value)} 
+                  className="w-full p-3 bg-gray-700 rounded border border-gray-600" 
+                  placeholder="e.g. 300"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Category</label>
+                <select 
+                  value={category} 
+                  onChange={e => setCategory(e.target.value)} 
+                  className="w-full p-3 bg-gray-700 rounded border border-gray-600"
+                >
+                  <optgroup label="Kitchen">
+                    <option value="food">Food</option>
+                  </optgroup>
+                  <optgroup label="Bar">
+                    <option value="beer">Beer</option>
+                    <option value="spirits">Spirits</option>
+                    <option value="whiskies">Whiskies</option>
+                    <option value="wine">Wine</option>
+                    <option value="soft_drink">Soft Drink</option>
+                    <option value="kegs">Kegs</option>
+                    <option value="tots">Tots</option>
+                    <option value="cigarettes">Cigarettes</option>
+                    <option value="general">General</option>
+                  </optgroup>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  * "Food" goes to Kitchen. All others go to Bar.
+                </p>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button 
+                  onClick={() => setShowModal(false)} 
+                  className="flex-1 py-3 bg-gray-600 rounded font-bold hover:bg-gray-500"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSave} 
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-orange-500 text-black font-bold rounded hover:bg-orange-400 disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : 'Save Item'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

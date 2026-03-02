@@ -4,86 +4,47 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import PermissionGate from '@/components/PermissionGate';
-import { Loader2, Printer, DollarSign, ShoppingCart, TrendingUp, Package } from 'lucide-react';
+import { Loader2, DollarSign, ShoppingCart, Users, Package } from 'lucide-react';
+import { formatCurrency } from '@/utils/formatCurrency';
 
-export default function ReportsPage() {
+export default function AdminDashboard() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState<'today' | 'month'>('today');
-  
-  // State for Data
-  const [salesData, setSalesData] = useState({ total: 0, count: 0, cash: 0, mpesa: 0 });
-  const [topItems, setTopItems] = useState<any[]>([]);
-  const [stockMoves, setStockMoves] = useState<any[]>([]);
+  const [stats, setStats] = useState({ revenue: 0, orders: 0, staff: 0, items: 0 });
 
   const supabase = createClient();
 
   useEffect(() => {
-    if (profile?.org_id) fetchAllData();
-  }, [profile, dateFilter]);
+    if (profile?.org_id) fetchStats();
+  }, [profile]);
 
-  const getDateRange = () => {
-    const now = new Date();
-    let start = new Date();
-    
-    if (dateFilter === 'today') {
-      start.setHours(0, 0, 0, 0);
-    } else {
-      start = new Date(now.getFullYear(), now.getMonth(), 1); // First day of month
-    }
-    return { start, end: now };
-  };
-
-  const fetchAllData = async () => {
+  const fetchStats = async () => {
     setLoading(true);
-    const { start, end } = getDateRange();
     const orgId = profile?.org_id;
+    const today = new Date().toISOString().split('T')[0];
 
-    // 1. Fetch Orders
-    const { data: orders } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString());
+    // Fetch basic counts (optimized for speed)
+    const [
+      { count: orderCount },
+      { data: orders },
+      { count: staffCount },
+      { count: itemCount }
+    ] = await Promise.all([
+      supabase.from('orders').select('*', { count: 'exact', head: true }).eq('org_id', orgId).gte('created_at', `${today}T00:00:00`),
+      supabase.from('orders').select('total_price').eq('org_id', orgId).gte('created_at', `${today}T00:00:00`),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
+      supabase.from('menu_items').select('*', { count: 'exact', head: true }).eq('org_id', orgId)
+    ]);
 
-    // 2. Process Sales Data
-    if (orders) {
-      // FIX: Added ': any' to order parameter 'o'
-      const total = orders.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
-      const cash = orders.filter((o: any) => o.payment_method === 'cash').reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
-      const mpesa = orders.filter((o: any) => o.payment_method === 'mpesa').reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
-      
-      setSalesData({ total, count: orders.length, cash, mpesa });
+    const totalRevenue = orders?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
 
-      // Process Top Items (Simple aggregation from items array)
-      const itemCounts: Record<string, { name: string; qty: number }> = {};
-      orders.forEach((order: any) => {
-        order.items?.forEach((item: any) => {
-          if (!itemCounts[item.name]) itemCounts[item.name] = { name: item.name, qty: 0 };
-          itemCounts[item.name].qty += item.quantity || 1;
-        });
-      });
-      
-      const sorted = Object.values(itemCounts).sort((a, b) => b.qty - a.qty).slice(0, 5);
-      setTopItems(sorted);
-    }
-
-    // 3. Fetch Stock Transactions
-    const { data: transactions } = await supabase
-      .from('stock_transactions')
-      .select('*, menu_items(name)')
-      .eq('org_id', orgId)
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString())
-      .order('created_at', { ascending: false });
-
-    setStockMoves(transactions || []);
+    setStats({
+      revenue: totalRevenue,
+      orders: orderCount || 0,
+      staff: staffCount || 0,
+      items: itemCount || 0
+    });
     setLoading(false);
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
@@ -91,120 +52,52 @@ export default function ReportsPage() {
   return (
     <PermissionGate allowedRoles={['owner', 'admin']}>
       <div className="p-8">
-        {/* Header & Filters */}
-        <div className="flex justify-between items-center mb-8 no-print">
-          <h1 className="text-3xl font-bold text-orange-400">Reports</h1>
-          <div className="flex gap-4 items-center">
-            <select 
-              value={dateFilter} 
-              onChange={(e) => setDateFilter(e.target.value as any)}
-              className="bg-gray-700 p-2 rounded text-white"
-            >
-              <option value="today">Today</option>
-              <option value="month">This Month</option>
-            </select>
-            <button onClick={handlePrint} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
-              <Printer size={18} /> Print Report
-            </button>
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold text-orange-400 mb-2">Dashboard</h1>
+        <p className="text-gray-400 mb-8">Welcome back! Here is your overview for today.</p>
 
-        {/* Sales Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
             <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">Total Revenue</p>
+              <p className="text-gray-400 text-sm">Today's Revenue</p>
               <DollarSign className="text-green-400" />
             </div>
-            <h2 className="text-3xl font-bold mt-2">KES {salesData.total.toLocaleString()}</h2>
+            <h2 className="text-3xl font-bold mt-2">KES {formatCurrency(stats.revenue)}</h2>
           </div>
           
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
             <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">Total Orders</p>
+              <p className="text-gray-400 text-sm">Today's Orders</p>
               <ShoppingCart className="text-blue-400" />
             </div>
-            <h2 className="text-3xl font-bold mt-2">{salesData.count}</h2>
+            <h2 className="text-3xl font-bold mt-2">{stats.orders}</h2>
           </div>
 
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
             <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">Cash Sales</p>
-              <TrendingUp className="text-yellow-400" />
+              <p className="text-gray-400 text-sm">Total Staff</p>
+              <Users className="text-purple-400" />
             </div>
-            <h2 className="text-2xl font-bold mt-2">KES {salesData.cash.toLocaleString()}</h2>
+            <h2 className="text-3xl font-bold mt-2">{stats.staff}</h2>
           </div>
 
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
             <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">M-Pesa/Card</p>
-              <TrendingUp className="text-purple-400" />
+              <p className="text-gray-400 text-sm">Menu Items</p>
+              <Package className="text-orange-400" />
             </div>
-            <h2 className="text-2xl font-bold mt-2">KES {salesData.mpesa.toLocaleString()}</h2>
+            <h2 className="text-3xl font-bold mt-2">{stats.items}</h2>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          {/* Top Selling Items */}
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 lg:col-span-1">
-            <h3 className="text-xl font-bold mb-4">Top Selling Items</h3>
-            <ul className="space-y-3">
-              {topItems.map((item, idx) => (
-                <li key={idx} className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                  <span>{item.name}</span>
-                  <span className="font-bold text-orange-400">{item.qty} sold</span>
-                </li>
-              ))}
-              {topItems.length === 0 && <p className="text-gray-500 text-center py-4">No sales data yet.</p>}
-            </ul>
-          </div>
-
-          {/* Stock Movement Report */}
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 lg:col-span-2">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Package size={20} /> Stock Movement
-            </h3>
-            <div className="overflow-x-auto max-h-96 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-800">
-                  <tr className="border-b border-gray-600 text-left">
-                    <th className="p-2">Date</th>
-                    <th className="p-2">Item</th>
-                    <th className="p-2">Type</th>
-                    <th className="p-2">Qty</th>
-                    <th className="p-2">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stockMoves.map((tx) => (
-                    <tr key={tx.id} className="border-b border-gray-700">
-                      <td className="p-2 text-gray-400">{new Date(tx.created_at).toLocaleDateString()}</td>
-                      <td className="p-2">{tx.menu_items?.name || 'Unknown'}</td>
-                      <td className="p-2">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          tx.transaction_type === 'purchase' ? 'bg-blue-900 text-blue-300' :
-                          tx.transaction_type === 'sale' ? 'bg-orange-900 text-orange-300' :
-                          tx.transaction_type === 'return' ? 'bg-green-900 text-green-300' :
-                          'bg-red-900 text-red-300'
-                        }`}>
-                          {tx.transaction_type}
-                        </span>
-                      </td>
-                      <td className={`p-2 font-bold ${tx.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {tx.quantity > 0 ? `+${tx.quantity}` : tx.quantity}
-                      </td>
-                      <td className="p-2 text-gray-400">{tx.note || '-'}</td>
-                    </tr>
-                  ))}
-                  {stockMoves.length === 0 && (
-                    <tr><td colSpan={5} className="text-center py-4 text-gray-500">No stock movements recorded.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+        
+        <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+          <h3 className="text-xl font-bold mb-2">Quick Actions</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+             <a href="/admin/pos" className="block p-4 bg-orange-500 text-black rounded font-bold text-center hover:bg-orange-400">Open POS</a>
+             <a href="/admin/menu" className="block p-4 bg-gray-700 text-white rounded font-bold text-center hover:bg-gray-600">Manage Menu</a>
+             <a href="/admin/settings/team" className="block p-4 bg-gray-700 text-white rounded font-bold text-center hover:bg-gray-600">Add Staff</a>
+             <a href="/admin/reports" className="block p-4 bg-gray-700 text-white rounded font-bold text-center hover:bg-gray-600">View Reports</a>
           </div>
         </div>
-
       </div>
     </PermissionGate>
   );
