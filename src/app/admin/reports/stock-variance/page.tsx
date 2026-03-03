@@ -32,9 +32,11 @@ export default function StockVariancePage() {
       .gte('created_at', startDate)
       .lte('created_at', endDate);
 
-    // 3. Process Data - EXPLICIT ANY TYPES ADDED HERE
+    // 3. Process Data
+    // FIX: Added explicit (item: any) type below
     const processedData = (items || []).map((item: any) => {
       
+      // FIX: Added explicit (tx: any) type below
       const itemTx = (transactions || []).filter((tx: any) => tx.menu_item_id === item.id);
 
       const purchases = itemTx.filter((tx: any) => tx.transaction_type === 'purchase').reduce((sum: number, tx: any) => sum + tx.quantity, 0);
