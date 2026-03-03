@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/utils/supabase';
-import { Loader2, Plus, Pencil, Trash2, Users, AlertTriangle, Eye } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, UserCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function GuestsManagementPage() {
@@ -26,7 +26,6 @@ export default function GuestsManagementPage() {
     if (!profile?.org_id) return;
     setLoading(true);
     
-    // 1. Get Guests
     const { data: guestsData, error } = await supabase
       .from('guests')
       .select('*')
@@ -37,15 +36,17 @@ export default function GuestsManagementPage() {
     
     // 2. Get Active Room Orders for these guests
     if (guestsData && guestsData.length > 0) {
-      const guestIds = guestsData.map(g => g.id);
+      // FIX: Added (g: any) type
+      const guestIds = guestsData.map((g: any) => g.id);
       const { data: orders } = await supabase
         .from('orders')
         .select('guest_id, total_price, rooms(room_number, id)')
         .in('guest_id', guestIds)
-        .in('status', ['pending', 'ready', 'active']); // Active orders
+        .in('status', ['pending', 'ready', 'active']);
 
       // 3. Map orders to guests
-      const guestMap = guestsData.map(guest => {
+      // FIX: Added (guest: any) type
+      const guestMap = guestsData.map((guest: any) => {
         const activeOrder = orders?.find((o: any) => o.guest_id === guest.id);
         return {
           ...guest,
@@ -128,17 +129,6 @@ export default function GuestsManagementPage() {
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
-
-  if (!profile?.org_id) {
-    return (
-      <div className="p-8 text-center">
-        <AlertTriangle className="mx-auto text-red-400 mb-4" size={48} />
-        <h2 className="text-xl font-bold text-red-400 mb-2">Configuration Error</h2>
-        <p className="text-gray-400 mb-4">Organization ID is missing.</p>
-        <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }} className="bg-orange-500 text-black px-6 py-2 rounded font-bold">Log Out</button>
-      </div>
-    );
-  }
 
   return (
     <div className="p-8">
