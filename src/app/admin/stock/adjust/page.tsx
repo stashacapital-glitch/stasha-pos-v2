@@ -1,16 +1,14 @@
  'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/utils/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// This line forces the page to be dynamic, fixing the useSearchParams build error
-export const dynamic = 'force-dynamic';
-
-export default function AdjustStockPage() {
+// The component that uses useSearchParams must be wrapped in Suspense
+function AdjustStockContent() {
   const { profile } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -91,5 +89,18 @@ export default function AdjustStockPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+// Default export wraps the content in Suspense
+export default function AdjustStockPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 flex items-center justify-center h-screen">
+        <Loader2 className="animate-spin text-orange-400" size={32} />
+      </div>
+    }>
+      <AdjustStockContent />
+    </Suspense>
   );
 }
