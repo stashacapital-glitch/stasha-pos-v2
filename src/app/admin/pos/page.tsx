@@ -44,12 +44,14 @@ export default function POSDashboard() {
     
     setActiveOrders(ordersData || []);
 
-    const tablesWithBills = (tablesData || []).map(table => {
+    // FIX: Added (table: any) type
+    const tablesWithBills = (tablesData || []).map((table: any) => {
       const order = (ordersData || []).find((o: any) => o.table_id === table.id);
       return { ...table, currentBill: order?.total_price || 0, orderStatus: order?.status || null, orderId: order?.id || null };
     });
 
-    const roomsWithStatus = (roomsData || []).map(room => {
+    // FIX: Added (room: any) type
+    const roomsWithStatus = (roomsData || []).map((room: any) => {
       const order = (ordersData || []).find((o: any) => o.room_id === room.id);
       return { ...room, currentBill: order?.total_price || 0, status: order ? 'occupied' : room.status, orderId: order?.id || null };
     });
@@ -110,7 +112,6 @@ export default function POSDashboard() {
           <p className="text-gray-400">Select a table or room.</p>
         </div>
         
-        {/* Pending Sync Banner */}
         {pendingSyncCount > 0 && (
           <button onClick={handleSyncNow} className="flex items-center gap-2 bg-blue-900 px-4 py-2 rounded border border-blue-500 text-blue-300 text-sm hover:bg-blue-800">
             <CloudUpload size={14} /> {pendingSyncCount} Pending Sync
@@ -131,8 +132,6 @@ export default function POSDashboard() {
         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
       </div>
 
-      {/* CONTENT AREA */}
-      
       {/* TABLES VIEW */}
       {activeView === 'tables' && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
