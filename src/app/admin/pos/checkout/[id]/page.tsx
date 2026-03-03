@@ -30,7 +30,6 @@ export default function RoomCheckoutPage() {
   const supabase = createClient();
 
   // --- ROLE CONTROL ---
-  // Owner, Admin, Manager, Supervisor, Receptionist can handle money
   const allowedRoles = ['owner', 'admin', 'manager', 'supervisor', 'receptionist'];
   const hasPermission = profile?.role && allowedRoles.includes(profile.role);
   // --------------------
@@ -53,12 +52,16 @@ export default function RoomCheckoutPage() {
 
     if (ordersData && ordersData.length > 0) {
       setOrders(ordersData);
-      const allItems = ordersData.flatMap(order => 
+      
+      // ===== FIX IS HERE: Added (order: any) and (item: any) =====
+      const allItems = ordersData.flatMap((order: any) => 
         (order.items || []).map((item: any) => ({
             ...item,
             orderId: order.id 
         }))
       );
+      // ==========================================================
+      
       setItems(allItems);
       if (ordersData[0].guests) setGuest(ordersData[0].guests);
     } else {
@@ -79,7 +82,7 @@ export default function RoomCheckoutPage() {
     if (targetOrderId) {
         const orderToUpdate = orders.find(o => o.id === targetOrderId);
         const updatedItems = [...(orderToUpdate?.items || []), newItem];
-        await supabase.from('orders').update({ items: updatedItems, total_price: updatedItems.reduce((s, i) => s + (i.price * i.quantity), 0) }).eq('id', targetOrderId);
+        await supabase.from('orders').update({ items: updatedItems, total_price: updatedItems.reduce((s: number, i: any) => s + (i.price * i.quantity), 0) }).eq('id', targetOrderId);
         toast.success("Room charge added");
     } else {
         const { data: newOrder } = await supabase.from('orders').insert({ org_id: profile?.org_id, room_id: roomId, items: [newItem], total_price: newItem.price, status: 'active', guest_id: guest?.id }).select().single();
@@ -88,7 +91,6 @@ export default function RoomCheckoutPage() {
     fetchData();
   };
 
-  // --- VOID LOGIC ---
   const openVoidModal = (index: number) => {
     setVoidingIndex(index);
     setVoidingItem(items[index]);
@@ -104,13 +106,9 @@ export default function RoomCheckoutPage() {
     if (voidingIndex === null) return;
 
     const itemToRemove = items[voidingIndex];
-    
-    // Optimistic UI update
     setItems(prev => prev.filter((_, i) => i !== voidingIndex));
     setShowVoidModal(false);
 
-    // Log the void (optional: send to a 'voids' table or just update order)
-    // Here we update the order and log to console/toast
     console.log(`VOID: Item "${itemToRemove.name}" removed. Reason: ${voidReason}. User: ${profile?.email}`);
     toast.success(`Item Voided: ${voidReason}`);
 
@@ -122,7 +120,7 @@ export default function RoomCheckoutPage() {
         );
         await supabase
           .from('orders')
-          .update({ items: updatedItems, total_price: updatedItems.reduce((s, i) => s + (i.price * i.quantity), 0) })
+          .update({ items: updatedItems, total_price: updatedItems.reduce((s: number, i: any) => s + (i.price * i.quantity), 0) })
           .eq('id', orderToUpdate.id);
       }
     }
@@ -133,7 +131,8 @@ export default function RoomCheckoutPage() {
     if (orders.length === 0) { toast.error("No active bill found."); return; }
     setProcessing(true);
     try {
-      const updatePromises = orders.map(order => supabase.from('orders').update({ status: 'paid', payment_method: method, paid_at: new Date().toISOString() }).eq('id', order.id));
+      // FIX: Added (order: any) here as well for safety
+      const updatePromises = orders.map((order: any) => supabase.from('orders').update({ status: 'paid', payment_method: method, paid_at: new Date().toISOString() }).eq('id', order.id));
       const results = await Promise.all(updatePromises);
       const error = results.find(r => r.error)?.error;
       if (error) throw error;
@@ -145,7 +144,6 @@ export default function RoomCheckoutPage() {
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
-  // --- RENDER PERMISSION GATE ---
   if (!hasPermission) {
     return (
         <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
@@ -153,9 +151,7 @@ export default function RoomCheckoutPage() {
                 <ShieldAlert className="mx-auto text-red-500 mb-4" size={48} />
                 <h2 className="text-xl font-bold text-white mb-2">Access Denied</h2>
                 <p className="text-gray-400 mb-6">Only Managers or Admins can process checkouts.</p>
-                <Link href="/admin/pos" className="px-6 py-2 bg-gray-600 rounded text-white text-sm hover:bg-gray-500">
-                    Back to POS
-                </Link>
+                <Link href="/admin/pos" className="px-6 py-2 bg-gray-600 rounded text-white text-sm hover:bg-gray-500">Back to POS</Link>
             </div>
         </div>
     );
@@ -164,31 +160,22 @@ export default function RoomCheckoutPage() {
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8">
       <div className="max-w-2xl mx-auto">
-        
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white">Checkout: Room {room?.room_number}</h1>
             {guest && <p className="text-sm text-gray-400">Guest: {guest.full_name}</p>}
           </div>
-          <Link href="/admin/pos">
-            <button className="text-sm bg-gray-700 px-4 py-2 rounded hover:bg-gray-600">Cancel</button>
-          </Link>
+          <Link href="/admin/pos"><button className="text-sm bg-gray-700 px-4 py-2 rounded hover:bg-gray-600">Cancel</button></Link>
         </div>
 
-        {/* Bill Details */}
         <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden mb-6">
           <div className="p-4 border-b border-gray-700 flex justify-between items-center">
             <h3 className="font-bold">Bill Items ({orders.length} order(s))</h3>
-            <button onClick={addRoomCharge} className="text-xs bg-purple-600 px-3 py-1 rounded flex items-center gap-1 hover:bg-purple-500">
-              <BedDouble size={14}/> Add Room Charge
-            </button>
+            <button onClick={addRoomCharge} className="text-xs bg-purple-600 px-3 py-1 rounded flex items-center gap-1 hover:bg-purple-500"><BedDouble size={14}/> Add Room Charge</button>
           </div>
           
           <div className="divide-y divide-gray-700">
-            {items.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No items on bill.</div>
-            ) : (
+            {items.length === 0 ? (<div className="p-8 text-center text-gray-500">No items on bill.</div>) : (
               items.map((item, idx) => (
                 <div key={idx} className="p-4 flex justify-between items-center hover:bg-gray-700/50">
                   <div>
@@ -197,10 +184,7 @@ export default function RoomCheckoutPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="font-mono text-orange-400">KES {item.price * item.quantity}</span>
-                    {/* VOID BUTTON */}
-                    <button onClick={() => openVoidModal(idx)} className="text-red-500 hover:text-red-400 flex items-center gap-1 text-xs">
-                      <Trash2 size={14} /> Void
-                    </button>
+                    <button onClick={() => openVoidModal(idx)} className="text-red-500 hover:text-red-400 flex items-center gap-1 text-xs"><Trash2 size={14} /> Void</button>
                   </div>
                 </div>
               ))
@@ -208,7 +192,6 @@ export default function RoomCheckoutPage() {
           </div>
         </div>
 
-        {/* Total */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
           <div className="flex justify-between items-center">
             <span className="text-xl font-bold">TOTAL</span>
@@ -216,7 +199,6 @@ export default function RoomCheckoutPage() {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="grid grid-cols-3 gap-4 mb-4">
           <button onClick={() => handlePayment('cash')} disabled={processing} className="py-4 bg-green-600 rounded-lg font-bold hover:bg-green-500 disabled:opacity-50">Cash</button>
           <button onClick={() => handlePayment('mpesa')} disabled={processing} className="py-4 bg-purple-600 rounded-lg font-bold hover:bg-purple-500 disabled:opacity-50">M-Pesa</button>
@@ -224,7 +206,6 @@ export default function RoomCheckoutPage() {
         </div>
       </div>
 
-      {/* VOID MODAL */}
       {showVoidModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-6 rounded-lg w-full max-w-sm border border-red-500">
@@ -232,18 +213,10 @@ export default function RoomCheckoutPage() {
               <AlertTriangle className="text-red-500" />
               <h2 className="text-lg font-bold text-white">Void Item</h2>
             </div>
-            <p className="text-sm text-gray-400 mb-4">
-              You are about to remove: <br/>
-              <span className="text-white font-bold">{voidingItem?.name} (KES {voidingItem?.price})</span>
-            </p>
-            
+            <p className="text-sm text-gray-400 mb-4">You are about to remove: <br/><span className="text-white font-bold">{voidingItem?.name}</span></p>
             <div className="mb-4">
               <label className="block text-sm text-gray-400 mb-1">Reason for Voiding *</label>
-              <select 
-                value={voidReason} 
-                onChange={(e) => setVoidReason(e.target.value)}
-                className="w-full p-3 bg-gray-700 rounded border border-gray-600"
-              >
+              <select value={voidReason} onChange={(e) => setVoidReason(e.target.value)} className="w-full p-3 bg-gray-700 rounded border border-gray-600">
                 <option value="">Select Reason...</option>
                 <option value="Wrong Order">Wrong Order</option>
                 <option value="Guest Complaint">Guest Complaint</option>
@@ -252,25 +225,13 @@ export default function RoomCheckoutPage() {
                 <option value="Other">Other</option>
               </select>
             </div>
-
             <div className="flex gap-3">
-              <button 
-                onClick={() => setShowVoidModal(false)}
-                className="flex-1 py-2 bg-gray-600 rounded hover:bg-gray-500"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleVoidConfirm}
-                className="flex-1 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-500"
-              >
-                Confirm Void
-              </button>
+              <button onClick={() => setShowVoidModal(false)} className="flex-1 py-2 bg-gray-600 rounded hover:bg-gray-500">Cancel</button>
+              <button onClick={handleVoidConfirm} className="flex-1 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-500">Confirm Void</button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
