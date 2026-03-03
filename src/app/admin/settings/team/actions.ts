@@ -10,7 +10,7 @@ export async function createStaffUser(formData: FormData) {
   const role = formData.get('role') as string;
 
   // 1. Get current user's org_id
-  const supabase = createClient();
+  const supabase = await createClient(); // <--- ADD AWAIT HERE
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) return { error: 'Not authenticated' };
@@ -22,7 +22,7 @@ export async function createStaffUser(formData: FormData) {
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
-    email_confirm: true, // Auto-confirm email
+    email_confirm: true,
     user_metadata: { 
       full_name: fullName,
       org_id: profile.org_id 
@@ -33,7 +33,7 @@ export async function createStaffUser(formData: FormData) {
     return { error: error.message };
   }
 
-  // 3. Update the profile with role and org_id explicitly
+  // 3. Update the profile
   if (data.user) {
     await supabaseAdmin.from('profiles').update({
       role: role,
