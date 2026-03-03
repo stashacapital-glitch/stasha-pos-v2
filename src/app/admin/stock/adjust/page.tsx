@@ -1,4 +1,4 @@
-'use client';
+ 'use client';
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,6 +7,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+// This line forces the page to be dynamic, fixing the useSearchParams build error
+export const dynamic = 'force-dynamic';
+
 export default function AdjustStockPage() {
   const { profile } = useAuth();
   const router = useRouter();
@@ -14,7 +17,7 @@ export default function AdjustStockPage() {
   const itemId = searchParams.get('item');
 
   const [quantity, setQuantity] = useState('');
-  const [reason, setReason] = useState('opening_adjustment'); // Default to opening adjustment
+  const [reason, setReason] = useState('opening_adjustment');
   const [submitting, setSubmitting] = useState(false);
 
   const supabase = createClient();
@@ -33,7 +36,7 @@ export default function AdjustStockPage() {
     const { error } = await supabase.from('stock_transactions').insert({
       org_id: profile?.org_id,
       menu_item_id: itemId,
-      quantity: qty, // Can be positive (found stock) or negative (loss/breakage)
+      quantity: qty,
       transaction_type: 'adjustment',
       note: reason
     });
@@ -57,7 +60,7 @@ export default function AdjustStockPage() {
             type="number" 
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            className="w-full p-3 bg-gray-700 rounded"
+            className="w-full p-3 bg-gray-700 rounded border border-gray-600"
             placeholder="e.g. 5 or -2"
             required
           />
@@ -69,7 +72,7 @@ export default function AdjustStockPage() {
           <select 
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full p-3 bg-gray-700 rounded"
+            className="w-full p-3 bg-gray-700 rounded border border-gray-600"
           >
             <option value="opening_adjustment">Opening Stock Correction</option>
             <option value="breakage">Breakage / Spoilage</option>
@@ -82,7 +85,7 @@ export default function AdjustStockPage() {
         <button 
           type="submit"
           disabled={submitting}
-          className="w-full py-3 bg-orange-500 text-black font-bold rounded flex items-center justify-center gap-2"
+          className="w-full py-3 bg-orange-500 text-black font-bold rounded flex items-center justify-center gap-2 hover:bg-orange-400 disabled:opacity-50"
         >
           {submitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Save Adjustment
         </button>
