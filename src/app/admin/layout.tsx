@@ -1,15 +1,24 @@
- import Sidebar from '@/components/Sidebar';
+ 'use client';
+
+import { useState } from 'react';
+import Sidebar from '@/components/Sidebar';
+import TopNav from '@/components/TopNav';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-950">
       {/* Sidebar Component */}
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
       {/* Main Content Area */}
-      {/* lg:ml-64 adds margin for the sidebar on large screens */}
-      <main className="flex-1 overflow-y-auto lg:ml-64">
-        {/* pt-16 adds top padding on mobile to clear the hamburger menu */}
+      <main className="flex-1 overflow-y-auto">
+        {/* TopNav for Mobile */}
+        <TopNav onMenuClick={() => setSidebarOpen(true)} />
+        
+        {/* Content Container */}
+        {/* pt-16 adds padding for the mobile top nav */}
         <div className="pt-16 lg:pt-0 h-full">
           {children}
         </div>

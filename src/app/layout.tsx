@@ -1,18 +1,14 @@
  import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // 1. Import font
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Toaster } from "react-hot-toast";
 
-// 2. Initialize font with subset optimization
-const inter = Inter({ 
-  subsets: ['latin'],
-  display: 'swap', // Prevents layout shift
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Stasha POS",
-  description: "Bar Point of Sale System",
+  title: "STASHA POS",
+  description: "Hotel & Restaurant Management System",
 };
 
 export default function RootLayout({
@@ -22,19 +18,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      {/* 3. Apply font class to body */}
-      <body className={`${inter.className} antialiased`}>
-        <Toaster 
+      <body className={`${inter.className} bg-gray-900`}>
+        {/* AuthProvider wraps everything to manage login state */}
+        <AuthProvider>
+          <Toaster 
             position="top-right"
             toastOptions={{
-                style: {
-                    background: '#333',
-                    color: '#fff',
-                },
+              className: 'bg-gray-800 text-white',
+              duration: 3000,
             }}
-        />
-        <AuthProvider>
-            {children}
+          />
+          {children}
         </AuthProvider>
       </body>
     </html>

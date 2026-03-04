@@ -1,216 +1,109 @@
  'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import PermissionGate from '@/components/PermissionGate';
-import { Loader2, Printer, DollarSign, ShoppingCart, TrendingUp, Package } from 'lucide-react';
-import { formatCurrency } from '@/utils/formatCurrency'; // Import the formatter
+import { createClient } from '@/utils/supabase';
+import { Loader2, DollarSign, ShoppingBag, TrendingDown, TrendingUp, CreditCard, Smartphone, Banknote, UserCheck } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+type Order = { id: string; total_price: number; payment_method: string | null; created_at: string; items: any[]; staff_id: string | null; staff: { full_name: string } | null; };
+type Expense = { id: string; amount: number; category: string; created_at: string; };
 
 export default function ReportsPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState<'today' | 'month'>('today');
-  
-  // State for Data
-  const [salesData, setSalesData] = useState({ total: 0, count: 0, cash: 0, mpesa: 0 });
-  const [topItems, setTopItems] = useState<any[]>([]);
-  const [stockMoves, setStockMoves] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('today');
 
   const supabase = createClient();
 
-  useEffect(() => {
-    if (profile?.org_id) fetchAllData();
-  }, [profile, dateFilter]);
+  useEffect(() => { if (profile?.org_id) fetchReportData(); }, [profile, dateRange]);
 
-  const getDateRange = () => {
-    const now = new Date();
-    let start = new Date();
-    
-    if (dateFilter === 'today') {
-      start.setHours(0, 0, 0, 0);
-    } else {
-      start = new Date(now.getFullYear(), now.getMonth(), 1); // First day of month
-    }
-    return { start, end: now };
-  };
-
-  const fetchAllData = async () => {
+  const fetchReportData = async () => {
     setLoading(true);
-    const { start, end } = getDateRange();
-    const orgId = profile?.org_id;
+    const now = new Date(); let startDate = new Date();
+    if (dateRange === 'today') startDate.setHours(0, 0, 0, 0);
+    else if (dateRange === 'week') startDate.setDate(now.getDate() - 7);
+    else startDate.setMonth(now.getMonth() - 1);
 
-    // 1. Fetch Orders
-    const { data: orders } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString());
+    const { data: orderData } = await supabase.from('orders').select('id, total_price, payment_method, created_at, items, staff_id, staff(id, full_name)').eq('org_id', profile?.org_id).eq('status', 'paid').gte('paid_at', startDate.toISOString()).order('paid_at', { ascending: false });
+    const { data: expenseData } = await supabase.from('expenses').select('id, amount, category, created_at').eq('org_id', profile?.org_id).gte('created_at', startDate.toISOString()).order('created_at', { ascending: false });
 
-    // 2. Process Sales Data
-    if (orders) {
-      // FIX: Added type annotations to prevent implicit 'any' error
-      const total = orders.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
-      const cash = orders.filter((o: any) => o.payment_method === 'Cash').reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
-      const mpesa = orders.filter((o: any) => o.payment_method === 'M-Pesa').reduce((sum: number, o: any) => sum + (o.total_price || 0), 0);
-      
-      setSalesData({ total, count: orders.length, cash, mpesa });
-
-      // Process Top Items (Simple aggregation from items array)
-      const itemCounts: Record<string, { name: string; qty: number }> = {};
-      // FIX: Added type annotation for order
-      orders.forEach((order: any) => {
-        order.items?.forEach((item: any) => {
-          if (!itemCounts[item.name]) itemCounts[item.name] = { name: item.name, qty: 0 };
-          itemCounts[item.name].qty += item.quantity || 1;
-        });
-      });
-      
-      const sorted = Object.values(itemCounts).sort((a, b) => b.qty - a.qty).slice(0, 5);
-      setTopItems(sorted);
-    }
-
-    // 3. Fetch Stock Transactions
-    const { data: transactions } = await supabase
-      .from('stock_transactions')
-      .select('*, menu_items(name)')
-      .eq('org_id', orgId)
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString())
-      .order('created_at', { ascending: false });
-
-    setStockMoves(transactions || []);
+    setOrders(orderData || []);
+    setExpenses(expenseData || []);
     setLoading(false);
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  // Calculations
+  const totalSales = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const totalOrders = orders.length;
+  const averageOrder = totalOrders > 0 ? totalSales / totalOrders : 0;
+  const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const netProfit = totalSales - totalExpenses;
+
+  const methodCounts = orders.reduce((acc, o) => { const m = o.payment_method || 'unknown'; acc[m] = (acc[m] || 0) + (o.total_price || 0); return acc; }, {} as Record<string, number>);
+
+  // Staff Performance
+  const staffPerf: Record<string, { name: string; sales: number; count: number }> = {};
+  orders.forEach(o => {
+    if (o.staff) {
+      const id = o.staff_id;
+      if (!staffPerf[id]) staffPerf[id] = { name: o.staff.full_name, sales: 0, count: 0 };
+      staffPerf[id].sales += o.total_price;
+      staffPerf[id].count++;
+    }
+  });
+  const topStaff = Object.values(staffPerf).sort((a, b) => b.sales - a.sales);
+
+  // Top Items
+  const itemCounts: Record<string, { name: string; qty: number; revenue: number }> = {};
+  orders.forEach(order => { order.items?.forEach((item: any) => { if (!itemCounts[item.name]) itemCounts[item.name] = { name: item.name, qty: 0, revenue: 0 }; itemCounts[item.name].qty += item.quantity; itemCounts[item.name].revenue += (item.price * item.quantity); }); });
+  const topItems = Object.values(itemCounts).sort((a, b) => b.qty - a.qty).slice(0, 5);
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   return (
-    <PermissionGate allowedRoles={['owner', 'admin']}>
-      <div className="p-8">
-        {/* Header & Filters */}
-        <div className="flex justify-between items-center mb-8 no-print">
-          <h1 className="text-3xl font-bold text-orange-400">Reports</h1>
-          <div className="flex gap-4 items-center">
-            <select 
-              value={dateFilter} 
-              onChange={(e) => setDateFilter(e.target.value as any)}
-              className="bg-gray-700 p-2 rounded text-white"
-            >
-              <option value="today">Today</option>
-              <option value="month">This Month</option>
-            </select>
-            <button onClick={handlePrint} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
-              <Printer size={18} /> Print Report
-            </button>
-          </div>
+    <div className="p-6 md:p-8 bg-gray-900 min-h-screen">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <h1 className="text-3xl font-bold text-white">Financial Report</h1>
+        <div className="flex gap-2 bg-gray-800 p-1 rounded-lg">
+          <button onClick={() => setDateRange('today')} className={`px-4 py-2 rounded text-sm font-medium transition ${dateRange === 'today' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:bg-gray-700'}`}>Today</button>
+          <button onClick={() => setDateRange('week')} className={`px-4 py-2 rounded text-sm font-medium transition ${dateRange === 'week' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:bg-gray-700'}`}>7 Days</button>
+          <button onClick={() => setDateRange('month')} className={`px-4 py-2 rounded text-sm font-medium transition ${dateRange === 'month' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:bg-gray-700'}`}>Month</button>
         </div>
-
-        {/* Sales Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-            <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">Total Revenue</p>
-              <DollarSign className="text-green-400" />
-            </div>
-            {/* Updated Format */}
-            <h2 className="text-3xl font-bold mt-2">KES {formatCurrency(salesData.total)}</h2>
-          </div>
-          
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-            <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">Total Orders</p>
-              <ShoppingCart className="text-blue-400" />
-            </div>
-            <h2 className="text-3xl font-bold mt-2">{salesData.count}</h2>
-          </div>
-
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-            <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">Cash Sales</p>
-              <TrendingUp className="text-yellow-400" />
-            </div>
-            {/* Updated Format */}
-            <h2 className="text-2xl font-bold mt-2">KES {formatCurrency(salesData.cash)}</h2>
-          </div>
-
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-            <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">M-Pesa/Card</p>
-              <TrendingUp className="text-purple-400" />
-            </div>
-            {/* Updated Format */}
-            <h2 className="text-2xl font-bold mt-2">KES {formatCurrency(salesData.mpesa)}</h2>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          {/* Top Selling Items */}
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 lg:col-span-1">
-            <h3 className="text-xl font-bold mb-4">Top Selling Items</h3>
-            <ul className="space-y-3">
-              {topItems.map((item, idx) => (
-                <li key={idx} className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                  <span>{item.name}</span>
-                  <span className="font-bold text-orange-400">{item.qty} sold</span>
-                </li>
-              ))}
-              {topItems.length === 0 && <p className="text-gray-500 text-center py-4">No sales data yet.</p>}
-            </ul>
-          </div>
-
-          {/* Stock Movement Report */}
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 lg:col-span-2">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Package size={20} /> Stock Movement
-            </h3>
-            <div className="overflow-x-auto max-h-96 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-800">
-                  <tr className="border-b border-gray-600 text-left">
-                    <th className="p-2">Date</th>
-                    <th className="p-2">Item</th>
-                    <th className="p-2">Type</th>
-                    <th className="p-2">Qty</th>
-                    <th className="p-2">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stockMoves.map((tx) => (
-                    <tr key={tx.id} className="border-b border-gray-700">
-                      <td className="p-2 text-gray-400">{new Date(tx.created_at).toLocaleDateString()}</td>
-                      <td className="p-2">{tx.menu_items?.name || 'Unknown'}</td>
-                      <td className="p-2">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          tx.transaction_type === 'purchase' ? 'bg-blue-900 text-blue-300' :
-                          tx.transaction_type === 'sale' ? 'bg-orange-900 text-orange-300' :
-                          tx.transaction_type === 'return' ? 'bg-green-900 text-green-300' :
-                          'bg-red-900 text-red-300'
-                        }`}>
-                          {tx.transaction_type}
-                        </span>
-                      </td>
-                      <td className={`p-2 font-bold ${tx.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {tx.quantity > 0 ? `+${tx.quantity}` : tx.quantity}
-                      </td>
-                      <td className="p-2 text-gray-400">{tx.note || '-'}</td>
-                    </tr>
-                  ))}
-                  {stockMoves.length === 0 && (
-                    <tr><td colSpan={5} className="text-center py-4 text-gray-500">No stock movements recorded.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
       </div>
-    </PermissionGate>
+
+      {/* TOP STATS */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700"><p className="text-gray-400 text-sm flex items-center gap-2"><TrendingUp size={14} className="text-green-400"/> Total Sales</p><p className="text-3xl font-bold text-white mt-2">KES {totalSales.toLocaleString()}</p></div>
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700"><p className="text-gray-400 text-sm flex items-center gap-2"><TrendingDown size={14} className="text-red-400"/> Total Expenses</p><p className="text-3xl font-bold text-white mt-2">KES {totalExpenses.toLocaleString()}</p></div>
+        <div className={`p-6 rounded-xl border ${netProfit >= 0 ? 'bg-green-900/30 border-green-700' : 'bg-red-900/30 border-red-700'}`}><p className={`text-sm flex items-center gap-2 ${netProfit >= 0 ? 'text-green-300' : 'text-red-300'}`}><DollarSign size={14}/> Net Profit</p><p className={`text-3xl font-bold mt-2 ${netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>KES {Math.abs(netProfit).toLocaleString()}</p></div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* Payment Breakdown */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+          <h3 className="text-lg font-bold text-white mb-4">Payment Methods</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center"><div className="flex items-center gap-3"><Banknote className="text-green-400" size={20} /><span className="text-white">Cash</span></div><span className="font-mono text-white font-bold">KES {(methodCounts['cash'] || 0).toLocaleString()}</span></div>
+            <div className="flex justify-between items-center"><div className="flex items-center gap-3"><Smartphone className="text-purple-400" size={20} /><span className="text-white">M-Pesa</span></div><span className="font-mono text-white font-bold">KES {(methodCounts['mpesa'] || 0).toLocaleString()}</span></div>
+            <div className="flex justify-between items-center"><div className="flex items-center gap-3"><CreditCard className="text-blue-400" size={20} /><span className="text-white">Card</span></div><span className="font-mono text-white font-bold">KES {(methodCounts['card'] || 0).toLocaleString()}</span></div>
+          </div>
+        </div>
+
+        {/* Top Selling Items */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+          <h3 className="text-lg font-bold text-white mb-4">Top Selling Items</h3>
+          {topItems.length === 0 ? <p className="text-gray-500 text-center py-4">No data</p> : <div className="space-y-3">{topItems.map(item => <div key={item.name} className="flex justify-between items-center border-b border-gray-700 pb-2 last:border-0"><div><p className="text-white font-medium">{item.name}</p><p className="text-xs text-gray-400">{item.qty} sold</p></div><p className="text-orange-400 font-mono text-sm">KES {item.revenue.toLocaleString()}</p></div>)}</div>}
+        </div>
+
+        {/* Staff Performance */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><UserCheck size={18}/> Staff Performance</h3>
+          {topStaff.length === 0 ? <p className="text-gray-500 text-center py-4">No data</p> : <div className="space-y-3">{topStaff.map(s => <div key={s.name} className="flex justify-between items-center border-b border-gray-700 pb-2 last:border-0"><div><p className="text-white font-medium">{s.name}</p><p className="text-xs text-gray-400">{s.count} orders</p></div><p className="text-green-400 font-mono text-sm">KES {s.sales.toLocaleString()}</p></div>)}</div>}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,120 +1,89 @@
- "use client";
+ 'use client';
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase';
-import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+import { User } from '@supabase/supabase-js';
 
-// 1. Define strict types based on your DB schema
-// UPDATED: Added kitchen_master and room_keeper
-type Role = 'owner' | 'admin' | 'barman' | 'waiter' | 'kitchen_master' | 'room_keeper' | null;
-
-// Using 'any' for Profile/Organization if you haven't generated types yet, 
-// but strictly typing Role is already a big improvement.
-type AuthContextType = {
-  user: User | null;
-  profile: any | null; 
-  organization: any | null;
-  role: Role;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
+type Profile = {
+  id: string;
+  org_id: string;
+  role: string;
+  business_name: string;
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+type AuthContextType = {
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+};
+
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  profile: null,
+  loading: true,
+});
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any | null>(null);
-  const [organization, setOrganization] = useState<any | null>(null);
-  const [role, setRole] = useState<Role>(null);
-  
-  const [loading, setLoading] = useState(true);
-  
   const supabase = createClient();
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const getProfileAndOrg = async (userId: string) => {
-    if (!userId) return;
-
-    try {
-      const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('*, organizations(*)')
-        .eq('user_id', userId)
-        .single();
-
-      if (error) {
-        console.warn("Profile fetch failed:", error.message);
-        return;
-      }
-      
-      if (profileData) {
-        setProfile(profileData);
-        setRole(profileData.role as Role);
-        
-        if (profileData.organizations) {
-          setOrganization(profileData.organizations);
-        }
-      }
-    } catch (err) {
-      console.error("Unexpected error fetching profile:", err);
+  const fetchProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, org_id, role, business_name')
+      .eq('id', userId)
+      .single();
+    
+    if (!error && data) {
+      setProfile(data as Profile);
+    } else {
+      // If no profile exists, sign out (security)
+      console.error("No profile found");
+      // await supabase.auth.signOut();
     }
+    setLoading(false);
   };
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    // 1. Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) await getProfileAndOrg(session.user.id);
-      setLoading(false);
-    };
-
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event: AuthChangeEvent, session: Session | null) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          getProfileAndOrg(session.user.id);
-        } else {
-          setProfile(null);
-          setOrganization(null);
-          setRole(null);
-        }
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
       }
-    );
+    });
+
+    // 2. Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        fetchProfile(session.user.id);
+        router.push('/admin'); // Redirect to dashboard on login
+      }
+      
+      if (event === 'SIGNED_OUT') {
+        setProfile(null);
+        router.push('/login'); // Redirect to login on logout
+      }
+    });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
-
-  const signIn = async (email: string, password: string) => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setLoading(false);
-      throw error;
-    }
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setOrganization(null);
-    setRole(null);
-  };
+  }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, profile, organization, role, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
