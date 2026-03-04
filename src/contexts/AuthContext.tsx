@@ -5,11 +5,13 @@ import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
 
+// Updated Type to include email
 type Profile = {
   id: string;
   org_id: string;
   role: string;
   business_name: string;
+  email?: string; // Added email
 };
 
 type AuthContextType = {
@@ -34,16 +36,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, org_id, role, business_name')
+      .select('id, org_id, role, business_name, email') // Fetching email
       .eq('id', userId)
       .single();
     
     if (!error && data) {
       setProfile(data as Profile);
     } else {
-      // If no profile exists, sign out (security)
       console.error("No profile found");
-      // await supabase.auth.signOut();
     }
     setLoading(false);
   };
@@ -65,12 +65,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       if (event === 'SIGNED_IN' && session?.user) {
         fetchProfile(session.user.id);
-        router.push('/admin'); // Redirect to dashboard on login
+        router.push('/admin');
       }
       
       if (event === 'SIGNED_OUT') {
         setProfile(null);
-        router.push('/login'); // Redirect to login on logout
+        router.push('/login');
       }
     });
 
