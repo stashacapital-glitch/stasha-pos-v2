@@ -40,7 +40,7 @@ export default function AdminDashboard() {
       .gte('paid_at', `${today}T00:00:00`)
       .lte('paid_at', `${today}T23:59:59`);
     
-    // FIX: Added 'any' type to 'o'
+    // FIX: Added explicit types
     const total = salesData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
     setTodaysSales(total);
 
@@ -50,7 +50,7 @@ export default function AdminDashboard() {
       .select('id, status')
       .eq('org_id', profile.org_id);
     
-    // FIX: Added 'any' type to 'r'
+    // FIX: Added explicit types
     const occupied = roomsData?.filter((r: any) => r.status === 'occupied').length || 0;
     setOccupancy({ occupied, total: roomsData?.length || 0 });
 
@@ -87,16 +87,8 @@ export default function AdminDashboard() {
   const setupRealtime = () => {
     const channel = supabase
       .channel('dashboard-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => fetchStats()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'rooms' },
-        () => fetchStats()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchStats())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -117,7 +109,7 @@ export default function AdminDashboard() {
             <DollarSign className="text-green-400" size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Today's Sales</p>
+            <p className="text-gray-400 text-sm">Today Sales</p>
             <p className="text-2xl font-bold text-white">KES {todaysSales.toLocaleString()}</p>
           </div>
         </div>
@@ -144,7 +136,7 @@ export default function AdminDashboard() {
           <div>
             <p className="text-gray-400 text-sm">Active Orders</p>
             <p className="text-2xl font-bold text-white">{activeOrders}</p>
-            <p className="text-xs text-orange-400 mt-1">View Kitchen &rarr;</p>
+            <p className="text-xs text-orange-400 mt-1">View Kitchen</p>
           </div>
         </Link>
 
@@ -156,9 +148,9 @@ export default function AdminDashboard() {
           <div>
             <p className="text-gray-400 text-sm">Total Guests</p>
             <p className="text-2xl font-bold text-white">{guestsCount}</p>
-            <p className="text-xs text-blue-400 mt-1">Manage &rarr;</p>
+            <p className="text-xs text-blue-400 mt-1">Manage</p>
           </div>
-        </div>
+        </Link>
 
       </div>
 
@@ -201,7 +193,7 @@ export default function AdminDashboard() {
             {recentOrders.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-4">No recent orders</p>
             ) : (
-              recentOrders.map((order: any) => ( // FIX: Added 'any' type to 'order'
+              recentOrders.map((order: any) => (
                 <div key={order.id} className="border-b border-gray-700 pb-2 last:border-0">
                   <div className="flex justify-between items-center">
                     <div>
