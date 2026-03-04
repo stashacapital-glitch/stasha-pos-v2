@@ -49,9 +49,12 @@ export default function ReportsPage() {
   orders.forEach(o => {
     if (o.staff) {
       const id = o.staff_id;
-      if (!staffPerf[id]) staffPerf[id] = { name: o.staff.full_name, sales: 0, count: 0 };
-      staffPerf[id].sales += o.total_price;
-      staffPerf[id].count++;
+      // FIX: Check if ID is not null before using as index
+      if (id) {
+        if (!staffPerf[id]) staffPerf[id] = { name: o.staff.full_name, sales: 0, count: 0 };
+        staffPerf[id].sales += o.total_price;
+        staffPerf[id].count++;
+      }
     }
   });
   const topStaff = Object.values(staffPerf).sort((a, b) => b.sales - a.sales);
