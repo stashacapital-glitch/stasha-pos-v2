@@ -28,10 +28,10 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     if (!profile?.org_id) return;
-    setLoading(true);
+    
+    const today = new Date().toISOString().split('T')[0]; 
 
     // 1. Today's Sales
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const { data: salesData } = await supabase
       .from('orders')
       .select('total_price')
@@ -40,7 +40,8 @@ export default function AdminDashboard() {
       .gte('paid_at', `${today}T00:00:00`)
       .lte('paid_at', `${today}T23:59:59`);
     
-    const total = salesData?.reduce((sum, o) => sum + (o.total_price || 0), 0) || 0;
+    // FIX: Added type 'number' to sum
+    const total = salesData?.reduce((sum: number, o) => sum + (o.total_price || 0), 0) || 0;
     setTodaysSales(total);
 
     // 2. Room Occupancy
@@ -83,18 +84,17 @@ export default function AdminDashboard() {
   };
 
   const setupRealtime = () => {
-    // Subscribe to Orders changes to update Sales & Active Orders
     const channel = supabase
       .channel('dashboard-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        () => fetchStats() // Refetch stats on any order change
+        () => fetchStats()
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rooms' },
-        () => fetchStats() // Refetch stats on room change
+        () => fetchStats()
       )
       .subscribe();
 
@@ -164,10 +164,9 @@ export default function AdminDashboard() {
       {/* MAIN CONTENT AREA */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* LEFT: Quick Actions & Chart Placeholder */}
+        {/* LEFT: Quick Actions */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Quick Actions */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -186,12 +185,10 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Sales Trend Placeholder */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 h-64 flex items-center justify-center">
              <div className="text-center text-gray-500">
                 <TrendingUp size={32} className="mx-auto mb-2 opacity-20"/>
                 <p>Sales Charts (Coming Soon)</p>
-                <p className="text-xs">Integrate Recharts or Chart.js here</p>
              </div>
           </div>
         </div>
