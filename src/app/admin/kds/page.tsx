@@ -51,7 +51,7 @@ export default function KitchenDisplayPage() {
     fetchOrders();
     const channel = supabase
       .channel('kds-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload: any) => {
         if (payload.eventType === 'INSERT') {
           fetchOrders();
           toast.success('New Order Received!');
@@ -69,7 +69,6 @@ export default function KitchenDisplayPage() {
   const updateStatus = async (id: string, newStatus: string) => {
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
     if (error) toast.error('Failed to update status');
-    // Real-time will handle UI update
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" size={48} /></div>;
