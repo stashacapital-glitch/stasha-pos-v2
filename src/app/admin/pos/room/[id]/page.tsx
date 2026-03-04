@@ -53,7 +53,7 @@ export default function RoomOrderPage() {
   }, []);
 
   const updatePendingCount = () => setPendingCount(JSON.parse(localStorage.getItem('pending_orders') || '[]').length);
-  const syncPendingOrders = async () => { /* ... omitted for brevity, same as before ... */ };
+  const syncPendingOrders = async () => { /* omitted */ };
 
   useEffect(() => { if (profile?.org_id && roomId) fetchData(); }, [profile, roomId]);
 
@@ -69,8 +69,7 @@ export default function RoomOrderPage() {
     const { data: allocatedGuest } = await supabase.from('guests').select('*').eq('current_room_id', roomId).maybeSingle();
     if (allocatedGuest) setGuest(allocatedGuest);
 
-    const { data: orderData } = await supabase
-      .from('orders').select('id, guest_id, items, staff_id, staff(id, full_name), guests(id, full_name)').eq('room_id', roomId).in('status', ['pending', 'ready', 'active']).limit(1).maybeSingle();
+    const { data: orderData } = await supabase.from('orders').select('id, guest_id, items, staff_id, staff(id, full_name), guests(id, full_name)').eq('room_id', roomId).in('status', ['pending', 'ready', 'active']).limit(1).maybeSingle();
     
     if (orderData) {
       setActiveOrder(orderData);
@@ -82,14 +81,13 @@ export default function RoomOrderPage() {
     const { data: staffData } = await supabase.from('staff').select('id, full_name, role').eq('is_active', true);
     if (staffData) setStaff(staffData);
 
-    // FETCH TAX SETTINGS
     const { data: profileData } = await supabase.from('profiles').select('tax_rate, service_charge_rate, tax_enabled, service_charge_enabled').eq('id', profile?.id).single();
     if (profileData) setTaxSettings(profileData);
 
     setLoading(false);
   };
 
-  // --- GUEST SEARCH LOGIC (Same as before) ---
+  // --- GUEST SEARCH LOGIC ---
   const searchGuests = async (query: string) => {
     if (!query || !profile?.org_id) { setGuestList([]); return; }
     const { data } = await supabase.from('guests').select('id, full_name, phone, current_room_id').eq('org_id', profile.org_id).or(`full_name.ilike.%${query}%,phone.ilike.%${query}%`).limit(5);
@@ -139,6 +137,8 @@ export default function RoomOrderPage() {
   const handleSubmitOrder = async () => {
     if (cart.length === 0) { toast.error('Add items first'); return; }
     if (!guest) { toast.error("Assign a guest to the room before billing."); return; }
+    if (!profile) { toast.error("User profile not found."); return; } // FIX FOR BUILD ERROR
+    
     setSubmitting(true);
     
     try {
@@ -167,13 +167,14 @@ export default function RoomOrderPage() {
   const handlePayment = async (method: 'cash' | 'mpesa' | 'card') => {
     if (!guest) { toast.error("Assign a guest first."); return; }
     if (cart.length === 0) { toast.error('Add items first'); return; }
+    if (!profile) { toast.error("User profile not found."); return; } // FIX FOR BUILD ERROR
+    
     setSubmitting(true);
     try {
       if (!activeOrder?.id) await handleSubmitOrder(); 
       const { data: currentOrder } = await supabase.from('orders').select('id').eq('room_id', roomId).in('status', ['pending', 'ready']).limit(1).single();
       if (!currentOrder) throw new Error("Order creation failed");
 
-      // SAVE GRAND TOTAL
       const { error: payError } = await supabase.from('orders').update({
         status: 'paid', payment_method: method, paid_at: new Date().toISOString(), staff_id: selectedStaff?.id, total_price: totals.grandTotal
       }).eq('id', currentOrder.id);
@@ -216,7 +217,7 @@ export default function RoomOrderPage() {
       {/* Main Grid */}
       <div className="flex-1 grid grid-cols-2 overflow-hidden min-h-0">
         
-        {/* LEFT: Menu (Same as before) */}
+        {/* LEFT: Menu */}
         <div className="h-full flex flex-col overflow-hidden bg-gray-800 border-r border-gray-700">
           <div className="flex-shrink-0 bg-gray-900 border-b border-gray-700 p-2 flex gap-2 overflow-x-auto"><button onClick={() => setActiveCategory('all')} className={`px-4 py-2 rounded text-sm font-medium whitespace-nowrap ${activeCategory === 'all' ? 'bg-orange-500 text-black' : 'bg-gray-700 text-gray-300'}`}>All</button>{categories.map(cat => (<button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-2 rounded text-sm font-medium whitespace-nowrap ${activeCategory === cat ? 'bg-orange-500 text-black' : 'bg-gray-700 text-gray-300'}`}>{cat.replace('_', ' ')}</button>))}</div>
           <div className="flex-1 overflow-y-auto p-4"><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{filteredItems.map(item => { const isOutOfStock = item.current_stock !== null && item.current_stock <= 0; return (<button key={item.id} onClick={() => !isOutOfStock && addToCart(item)} disabled={isOutOfStock} className={`p-3 rounded text-left transition text-sm ${isOutOfStock ? 'bg-gray-900 opacity-50 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'}`}><p className="font-semibold text-white truncate">{item.name}</p><p className="text-orange-400 font-mono text-xs mt-1">KES {item.price}</p></button>); })}</div></div>
