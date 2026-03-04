@@ -2,8 +2,8 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 
-// Define allowed roles
-type Role = 'admin' | 'manager' | 'waiter' | 'chef' | 'bartender' | 'room_manager';
+// Updated to include all roles found in the project
+type Role = 'admin' | 'manager' | 'waiter' | 'chef' | 'bartender' | 'room_manager' | 'owner' | 'kitchen_master' | 'barman';
 
 type Props = {
   allowedRoles: Role[];
@@ -16,7 +16,7 @@ export default function PermissionGate({ allowedRoles, children, fallback = null
 
   if (!profile) return null;
 
-  // FIX: Cast profile.role to Role type to satisfy TypeScript
+  // Cast profile.role to Role type to satisfy TypeScript
   const hasPermission = allowedRoles.includes(profile.role as Role);
 
   if (!hasPermission) {
