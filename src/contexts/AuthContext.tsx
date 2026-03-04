@@ -5,13 +5,14 @@ import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
 
-// Updated Type to include email
+// Updated Type to include full_name
 type Profile = {
   id: string;
   org_id: string;
   role: string;
   business_name: string;
-  email?: string; // Added email
+  email?: string;
+  full_name?: string; // Added full_name
 };
 
 type AuthContextType = {
@@ -36,7 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, org_id, role, business_name, email') // Fetching email
+      .select('id, org_id, role, business_name, email, full_name') // Fetching full_name
       .eq('id', userId)
       .single();
     
