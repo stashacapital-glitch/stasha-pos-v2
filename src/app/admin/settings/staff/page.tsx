@@ -120,7 +120,8 @@ export default function StaffManagementPage() {
               <div>
                 <h3 className="font-bold text-white text-lg flex items-center gap-2">
                   {s.full_name}
-                  {s.pin_code && <KeyRound size={14} className="text-green-400" title="Has PIN" />}
+                  {/* FIX: Removed invalid 'title' prop */}
+                  {s.pin_code && <KeyRound size={14} className="text-green-400" />}
                 </h3>
                 <p className="text-xs text-gray-400 uppercase">{s.role}</p>
                 <p className="text-sm text-gray-500 mt-1">{s.phone || 'No phone'}</p>
@@ -154,7 +155,6 @@ export default function StaffManagementPage() {
                   <option value="waiter">Waiter</option>
                   <option value="chef">Chef</option>
                   <option value="bartender">Bartender</option>
-                  {/* ADDED ROOM MANAGER */}
                   <option value="room_manager">Room Manager</option>
                   <option value="manager">General Manager</option>
                 </select>
