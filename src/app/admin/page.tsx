@@ -40,8 +40,8 @@ export default function AdminDashboard() {
       .gte('paid_at', `${today}T00:00:00`)
       .lte('paid_at', `${today}T23:59:59`);
     
-    // FIX: Added type 'number' to sum
-    const total = salesData?.reduce((sum: number, o) => sum + (o.total_price || 0), 0) || 0;
+    // FIX: Added 'any' type to 'o'
+    const total = salesData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
     setTodaysSales(total);
 
     // 2. Room Occupancy
@@ -50,7 +50,8 @@ export default function AdminDashboard() {
       .select('id, status')
       .eq('org_id', profile.org_id);
     
-    const occupied = roomsData?.filter(r => r.status === 'occupied').length || 0;
+    // FIX: Added 'any' type to 'r'
+    const occupied = roomsData?.filter((r: any) => r.status === 'occupied').length || 0;
     setOccupancy({ occupied, total: roomsData?.length || 0 });
 
     // 3. Active Orders (Kitchen Load)
@@ -157,7 +158,7 @@ export default function AdminDashboard() {
             <p className="text-2xl font-bold text-white">{guestsCount}</p>
             <p className="text-xs text-blue-400 mt-1">Manage &rarr;</p>
           </div>
-        </Link>
+        </div>
 
       </div>
 
@@ -200,7 +201,7 @@ export default function AdminDashboard() {
             {recentOrders.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-4">No recent orders</p>
             ) : (
-              recentOrders.map(order => (
+              recentOrders.map((order: any) => ( // FIX: Added 'any' type to 'order'
                 <div key={order.id} className="border-b border-gray-700 pb-2 last:border-0">
                   <div className="flex justify-between items-center">
                     <div>
