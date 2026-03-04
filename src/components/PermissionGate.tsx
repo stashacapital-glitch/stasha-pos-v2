@@ -1,54 +1,26 @@
  'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 
-// UPDATED: Added kitchen_master and room_keeper
-type Role = 'owner' | 'admin' | 'barman' | 'waiter' | 'kitchen_master' | 'room_keeper';
+// Define allowed roles
+type Role = 'admin' | 'manager' | 'waiter' | 'chef' | 'bartender' | 'room_manager';
 
-export default function PermissionGate({
-  children,
-  allowedRoles
-}: {
+type Props = {
+  allowedRoles: Role[];
   children: React.ReactNode;
-  allowedRoles: Role[]
-}) {
-  const { profile, loading } = useAuth();
-  const router = useRouter();
+  fallback?: React.ReactNode;
+};
 
-  useEffect(() => {
-    // If not loading and no profile, redirect to login
-    if (!loading && !profile) {
-      router.push('/login');
-    }
-  }, [profile, loading, router]);
-
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-900 text-white">
-        Loading...
-      </div>
-    );
-  }
+export default function PermissionGate({ allowedRoles, children, fallback = null }: Props) {
+  const { profile } = useAuth();
 
   if (!profile) return null;
 
-  const hasPermission = allowedRoles.includes(profile.role);
+  // FIX: Cast profile.role to Role type to satisfy TypeScript
+  const hasPermission = allowedRoles.includes(profile.role as Role);
 
   if (!hasPermission) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-gray-900 text-white">
-        <h1 className="text-2xl font-bold text-red-500 mb-4">Access Denied</h1>
-        <p className="text-gray-400">You do not have permission to view this page.</p>
-        <button
-          onClick={() => router.push('/admin')}
-          className="mt-4 px-4 py-2 bg-orange-500 text-black rounded font-bold"
-        >
-          Go to Dashboard
-        </button>
-      </div>
-    );
+    return <>{fallback}</>;
   }
 
   return <>{children}</>;
