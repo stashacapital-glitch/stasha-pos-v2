@@ -10,7 +10,6 @@ export default function AdminDashboard() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   
-  // Stats State
   const [todaysSales, setTodaysSales] = useState(0);
   const [occupancy, setOccupancy] = useState({ occupied: 0, total: 0 });
   const [activeOrders, setActiveOrders] = useState(0);
@@ -31,7 +30,6 @@ export default function AdminDashboard() {
     
     const today = new Date().toISOString().split('T')[0]; 
 
-    // 1. Today's Sales
     const { data: salesData } = await supabase
       .from('orders')
       .select('total_price')
@@ -40,21 +38,17 @@ export default function AdminDashboard() {
       .gte('paid_at', `${today}T00:00:00`)
       .lte('paid_at', `${today}T23:59:59`);
     
-    // FIX: Added explicit types
     const total = salesData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
     setTodaysSales(total);
 
-    // 2. Room Occupancy
     const { data: roomsData } = await supabase
       .from('rooms')
       .select('id, status')
       .eq('org_id', profile.org_id);
     
-    // FIX: Added explicit types
     const occupied = roomsData?.filter((r: any) => r.status === 'occupied').length || 0;
     setOccupancy({ occupied, total: roomsData?.length || 0 });
 
-    // 3. Active Orders (Kitchen Load)
     const { count } = await supabase
       .from('orders')
       .select('id', { count: 'exact', head: true })
@@ -63,7 +57,6 @@ export default function AdminDashboard() {
     
     setActiveOrders(count || 0);
 
-    // 4. Total Guests
     const { count: guestCount } = await supabase
       .from('guests')
       .select('id', { count: 'exact', head: true })
@@ -71,7 +64,6 @@ export default function AdminDashboard() {
     
     setGuestsCount(guestCount || 0);
 
-    // 5. Recent Activity
     const { data: recent } = await supabase
       .from('orders')
       .select('id, created_at, total_price, status, guests(full_name), rooms(room_number)')
@@ -94,62 +86,52 @@ export default function AdminDashboard() {
     return () => { supabase.removeChannel(channel); };
   };
 
+  const formatMoney = (amount: number) => {
+    return amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   if (loading) return <div className="flex items-center justify-center h-screen bg-gray-900"><Loader2 className="animate-spin text-orange-400" size={48} /></div>;
 
   return (
     <div className="p-6 md:p-8 bg-gray-900 min-h-screen">
-      <h1 className="text-3xl font-bold text-white mb-6">Dashboard</h1>
+      
+      {/* CENTERED TITLE */}
+      <h1 className="text-3xl font-bold text-white mb-8 text-center">Dashboard</h1>
 
       {/* TOP STATS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         
-        {/* Sales Card */}
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex items-center gap-4">
-          <div className="p-3 bg-green-900/50 rounded-lg">
-            <DollarSign className="text-green-400" size={24} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Today Sales</p>
-            <p className="text-2xl font-bold text-white">KES {todaysSales.toLocaleString()}</p>
+        {/* Sales Card - Centered Content */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex flex-col items-center justify-center text-center">
+          <DollarSign className="text-green-400 mb-2" size={32} />
+          <p className="text-gray-400 text-sm">Today Sales</p>
+          <p className="text-3xl font-bold text-white mt-1">KES {formatMoney(todaysSales)}</p>
+        </div>
+
+        {/* Occupancy Card - Centered Content */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex flex-col items-center justify-center text-center">
+          <BedDouble className="text-purple-400 mb-2" size={32} />
+          <p className="text-gray-400 text-sm">Room Occupancy</p>
+          <p className="text-3xl font-bold text-white mt-1">{occupancy.occupied} / {occupancy.total}</p>
+          <div className="w-full bg-gray-700 h-1 rounded mt-3">
+            <div className="bg-purple-500 h-1 rounded" style={{ width: `${occupancy.total > 0 ? (occupancy.occupied / occupancy.total) * 100 : 0}%` }}></div>
           </div>
         </div>
 
-        {/* Occupancy Card */}
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex items-center gap-4">
-          <div className="p-3 bg-purple-900/50 rounded-lg">
-            <BedDouble className="text-purple-400" size={24} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Room Occupancy</p>
-            <p className="text-2xl font-bold text-white">{occupancy.occupied} / {occupancy.total}</p>
-            <div className="w-full bg-gray-700 h-1 rounded mt-2">
-              <div className="bg-purple-500 h-1 rounded" style={{ width: `${occupancy.total > 0 ? (occupancy.occupied / occupancy.total) * 100 : 0}%` }}></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Kitchen Load Card */}
-        <Link href="/admin/kds" className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex items-center gap-4 hover:border-orange-500 transition cursor-pointer">
-          <div className="p-3 bg-orange-900/50 rounded-lg">
-            <CookingPot className="text-orange-400" size={24} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Active Orders</p>
-            <p className="text-2xl font-bold text-white">{activeOrders}</p>
-            <p className="text-xs text-orange-400 mt-1">View Kitchen</p>
-          </div>
+        {/* Kitchen Load Card - Centered Content */}
+        <Link href="/admin/kds" className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex flex-col items-center justify-center text-center hover:border-orange-500 transition cursor-pointer">
+          <CookingPot className="text-orange-400 mb-2" size={32} />
+          <p className="text-gray-400 text-sm">Active Orders</p>
+          <p className="text-3xl font-bold text-white mt-1">{activeOrders}</p>
+          <p className="text-xs text-orange-400 mt-2">View Kitchen &rarr;</p>
         </Link>
 
-        {/* Guests Card */}
-        <Link href="/admin/settings/guests" className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex items-center gap-4 hover:border-blue-500 transition cursor-pointer">
-          <div className="p-3 bg-blue-900/50 rounded-lg">
-            <Users className="text-blue-400" size={24} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Total Guests</p>
-            <p className="text-2xl font-bold text-white">{guestsCount}</p>
-            <p className="text-xs text-blue-400 mt-1">Manage</p>
-          </div>
+        {/* Guests Card - Centered Content */}
+        <Link href="/admin/settings/guests" className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex flex-col items-center justify-center text-center hover:border-blue-500 transition cursor-pointer">
+          <Users className="text-blue-400 mb-2" size={32} />
+          <p className="text-gray-400 text-sm">Total Guests</p>
+          <p className="text-3xl font-bold text-white mt-1">{guestsCount}</p>
+          <p className="text-xs text-blue-400 mt-2">Manage &rarr;</p>
         </Link>
 
       </div>
@@ -206,7 +188,7 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-orange-400 font-mono text-sm">KES {order.total_price}</p>
+                      <p className="text-orange-400 font-mono text-sm">KES {formatMoney(order.total_price)}</p>
                       <span className={`text-xs px-2 py-0.5 rounded ${
                         order.status === 'paid' ? 'bg-green-800 text-green-300' : 
                         order.status === 'pending' ? 'bg-yellow-800 text-yellow-300' : 

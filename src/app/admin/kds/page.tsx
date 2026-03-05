@@ -69,6 +69,7 @@ export default function KitchenDisplayPage() {
   const updateStatus = async (id: string, newStatus: string) => {
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
     if (error) toast.error('Failed to update status');
+    else toast.success('Status Updated');
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" size={48} /></div>;

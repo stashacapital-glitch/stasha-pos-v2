@@ -53,7 +53,7 @@ export default function RoomOrderPage() {
   }, []);
 
   const updatePendingCount = () => setPendingCount(JSON.parse(localStorage.getItem('pending_orders') || '[]').length);
-  const syncPendingOrders = async () => { /* omitted for brevity */ };
+  const syncPendingOrders = async () => { /* omitted */ };
 
   useEffect(() => { if (profile?.org_id && roomId) fetchData(); }, [profile, roomId]);
 
@@ -94,12 +94,43 @@ export default function RoomOrderPage() {
     if (data) setGuestList(data);
   };
 
+  // --- HELPER: ADD ROOM CHARGE ---
+  const addRoomChargeToCart = (isOverstay: boolean = false) => {
+    if (!room) return;
+    const chargeName = isOverstay ? `Overstay Charge (${room.type})` : `Room Charge (${room.type})`;
+    // For overstay, we charge full day? Or half? Assuming full day control.
+    const price = room.price_per_night; 
+    
+    setCart(prev => {
+        // Prevent duplicate overstay charges for the same logic
+        if(isOverstay && prev.some(i => i.name === chargeName)) return prev;
+        return [...prev, { id: `room-charge-${Date.now()}`, name: chargeName, price: price, quantity: 1, category: 'room', is_room_charge: true }];
+    });
+    toast.success(isOverstay ? "Overstay charge added!" : "Room charge added");
+  };
+
   const selectGuest = async (selectedGuest: any) => {
     if (selectedGuest.current_room_id && selectedGuest.current_room_id !== roomId) { toast.error("This guest is already checked into another room!"); return; }
-    setGuest(selectedGuest); setShowGuestSearch(false); setGuestSearchQuery(''); setGuestList([]);
-    if (activeOrder?.id) { await supabase.from('orders').update({ guest_id: selectedGuest.id }).eq('id', activeOrder.id); setActiveOrder((prev: any) => ({ ...prev, guest_id: selectedGuest.id, guests: selectedGuest })); }
+    
+    setGuest(selectedGuest); 
+    setShowGuestSearch(false); 
+    setGuestSearchQuery(''); 
+    setGuestList([]);
+    
+    if (activeOrder?.id) {
+       await supabase.from('orders').update({ guest_id: selectedGuest.id }).eq('id', activeOrder.id);
+       setActiveOrder((prev: any) => ({ ...prev, guest_id: selectedGuest.id, guests: selectedGuest }));
+    }
+    
     await supabase.from('rooms').update({ current_guest_id: selectedGuest.id, status: 'occupied' }).eq('id', roomId);
     await supabase.from('guests').update({ current_room_id: roomId }).eq('id', selectedGuest.id);
+    
+    // AUTO-CHARGE: First Night
+    // Only add if cart is empty (new check-in basically)
+    if (cart.length === 0) {
+        addRoomChargeToCart(false);
+    }
+
     toast.success(`Assigned ${selectedGuest.full_name}`);
   };
 
@@ -112,14 +143,10 @@ export default function RoomOrderPage() {
       return [...prev, { ...item, quantity: 1 }];
     });
   };
-  const addRoomCharge = () => {
-    if (!room) return;
-    setCart(prev => [...prev, { id: `room-charge-${room.id}`, name: `Room Charge (${room.type})`, price: room.price_per_night, quantity: 1, category: 'room', is_room_charge: true }]);
-    toast.success("Room charge added");
-  };
+
   const updateQuantity = (id: string | null, delta: number) => setCart(prev => prev.map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter(item => item.quantity > 0));
   
-  // --- CALCULATION WITH TAX (FIXED FOR DECIMALS) ---
+  // --- CALCULATION WITH TAX ---
   const calculateTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     let taxAmount = 0;
@@ -128,7 +155,6 @@ export default function RoomOrderPage() {
     if (taxSettings?.tax_enabled) taxAmount = subtotal * (taxSettings.tax_rate || 0);
     if (taxSettings?.service_charge_enabled) serviceAmount = subtotal * (taxSettings.service_charge_rate || 0);
 
-    // FIX: Round to 2 decimal places immediately to prevent floating point errors (e.g. 11699.699999)
     const total = subtotal + taxAmount + serviceAmount;
 
     return { 
@@ -140,6 +166,59 @@ export default function RoomOrderPage() {
   };
 
   const totals = calculateTotals();
+
+  // --- AUTOMATIC OVERSTAY CHECK ---
+  useEffect(() => {
+    if (guest && room && cart.length > 0) {
+        const now = new Date();
+        const currentHour = now.getHours();
+        
+        // Logic: If past 10 AM (10:00)
+        if (currentHour >= 10) {
+            // Check if we already have an "Overstay Charge" in cart
+            const hasOverstay = cart.some(i => i.name.includes('Overstay'));
+            // Check if we have a standard Room Charge
+            const hasStandardCharge = cart.some(i => i.name.includes('Room Charge') && !i.name.includes('Overstay'));
+
+            // If they are still in room and haven't been charged for overstay
+            if (!hasOverstay && hasStandardCharge) {
+                // We need to be careful not to spam this. 
+                // Only trigger once logic or let user trigger?
+                // For "Control Purpose", let's auto-add but warn.
+                // Actually, better to check if the guest checked in YESTERDAY.
+                // We can't easily check "check-in date" without storing it.
+                // Simple Logic: If it's past 10AM and they have a room charge, assume they might be overstaying if they didn't checkout.
+                
+                // REFINED LOGIC:
+                // If current cart has "Room Charge" but NO "Overstay Charge" AND time > 10:00 AM
+                // We prompt or auto-add.
+                // To avoid infinite loops, we use a ref or check item name.
+                
+                // Let's just auto-add for now as requested "automatic"
+                // But to prevent adding EVERY render, we check specific name.
+                if (!hasOverstay) {
+                   // addRoomChargeToCart(true); 
+                   // ^ This might be annoying if I just checked in at 11 AM.
+                   // Better logic: Check if "Room Charge" was added "Yesterday". 
+                   // Since we don't have timestamps on cart items easily, let's require manual trigger for now, 
+                   // OR check the `created_at` of the active order.
+                   
+                   if (activeOrder?.created_at) {
+                       const orderDate = new Date(activeOrder.created_at).toDateString();
+                       const today = now.toDateString();
+                       // If order was created on a different day, and it's past 10 AM -> OVERSTAY
+                       if (orderDate !== today && currentHour >= 10) {
+                           if (!hasOverstay) {
+                               toast.error(`Overstay Detected! It is past 10:00 AM.`);
+                               addRoomChargeToCart(true);
+                           }
+                       }
+                   }
+                }
+            }
+        }
+    }
+  }, [guest, room, cart, activeOrder]);
 
   // --- SUBMIT ORDER ---
   const handleSubmitOrder = async () => {
@@ -197,7 +276,7 @@ export default function RoomOrderPage() {
     } catch (err: any) { toast.error(err.message); } finally { setSubmitting(false); }
   };
 
-  // Helper for formatting
+  // Helper
   const formatMoney = (amount: number) => amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
@@ -220,7 +299,6 @@ export default function RoomOrderPage() {
           <div className="flex items-center gap-4"><div className="p-2 bg-purple-900 rounded"><Home className="text-purple-400"/></div><div><h1 className="text-xl font-bold text-white">Room {room?.room_number}</h1><p className="text-xs text-gray-400">{room?.type} - KES {room?.price_per_night}/night</p></div></div>
           <div className="text-right flex flex-col items-end gap-2">
              <button onClick={() => setShowGuestSearch(true)} className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition ${guest ? 'bg-green-800 text-green-200 border border-green-600' : 'bg-red-800 text-red-200 border border-red-600 animate-pulse'}`}>{guest ? <><User size={12} /> {guest.full_name}</> : <><AlertCircle size={12} /> Assign Guest</>}</button>
-             {/* FIX: Format display price */}
              <p className="text-xl font-bold text-orange-400">KES {formatMoney(totals.grandTotal)}</p>
           </div>
         </div>
@@ -239,7 +317,8 @@ export default function RoomOrderPage() {
         <div className="h-full flex flex-col overflow-hidden bg-gray-900">
            <div className="p-4 border-b border-gray-700 bg-gray-800 space-y-2">
              <select value={selectedStaff?.id || ''} onChange={(e) => setSelectedStaff(staff.find(s => s.id === e.target.value) || null)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white text-xs"><option value="">Select Waiter (Optional)</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>)}</select>
-             <button onClick={addRoomCharge} className="w-full py-2 bg-purple-900 text-purple-300 rounded font-bold text-sm flex items-center justify-center gap-2 hover:bg-purple-800"><BedDouble size={14}/> Add Room Charge</button>
+             {/* Manual Button removed as it is now automatic, or keep for extra charges? */}
+             <button onClick={() => addRoomChargeToCart(false)} className="w-full py-2 bg-purple-900 text-purple-300 rounded font-bold text-sm flex items-center justify-center gap-2 hover:bg-purple-800"><BedDouble size={14}/> Add Extra Room Charge</button>
            </div>
 
            <div className="flex-1 overflow-y-auto p-4 min-h-0 space-y-2">
@@ -261,7 +340,6 @@ export default function RoomOrderPage() {
            {/* Footer */}
            <div className="flex-shrink-0 border-t border-gray-700 p-4 bg-gray-800 space-y-2">
              <div className="text-xs text-gray-400 space-y-1">
-                {/* FIX: Format display prices */}
                 <div className="flex justify-between"><span>Subtotal:</span><span>KES {formatMoney(totals.subtotal)}</span></div>
                 {taxSettings?.tax_enabled && <div className="flex justify-between text-red-400"><span>VAT ({Number(taxSettings.tax_rate) * 100}%):</span><span>KES {formatMoney(totals.taxAmount)}</span></div>}
                 {taxSettings?.service_charge_enabled && <div className="flex justify-between text-blue-400"><span>Service ({Number(taxSettings.service_charge_rate) * 100}%):</span><span>KES {formatMoney(totals.serviceAmount)}</span></div>}
