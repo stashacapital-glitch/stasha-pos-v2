@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
-// Import necessary types
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 type Profile = {
@@ -13,6 +12,7 @@ type Profile = {
   business_name: string;
   email?: string;
   full_name?: string;
+  is_on_shift: boolean;
 };
 
 type AuthContextType = {
@@ -35,23 +35,61 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
+    // 1. Fetch Basic Profile
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('id, org_id, role, business_name, email, full_name')
       .eq('id', userId)
-      .single();
-    
-    if (!error && data) {
-      setProfile(data as Profile);
-    } else {
-      console.error("No profile found");
+      .maybeSingle();
+
+    if (profileError || !profileData) {
+      console.error("Profile fetch error", profileError);
+      setLoading(false);
+      return;
     }
+
+    // 2. Check if user is a Staff Member (to check shift status)
+    // We use maybeSingle() so it doesn't crash if no staff record exists (e.g. for Admins)
+    const { data: staffData } = await supabase
+      .from('staff')
+      .select('is_on_shift, role')
+      .eq('auth_id', userId)
+      .maybeSingle();
+
+    // 3. Determine Shift Status
+    // If user is in staff table, use that status. 
+    // If NOT in staff table (e.g. Admin/Owner), default to TRUE (always on shift).
+    let onShift = true;
+    let userRole = profileData.role;
+
+    if (staffData) {
+      onShift = staffData.is_on_shift ?? false;
+      // Use staff role if available
+      if (staffData.role) userRole = staffData.role;
+    }
+
+    const finalProfile: Profile = {
+      ...profileData,
+      is_on_shift: onShift,
+      role: userRole
+    };
+
+    setProfile(finalProfile);
     setLoading(false);
   };
 
   useEffect(() => {
     // 1. Check active session
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }: { data: { session: Session | null }, error: any }) => {
+      
+      // If refresh token is invalid, sign out
+      if (error) {
+        console.error("Session Error:", error.message);
+        supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
