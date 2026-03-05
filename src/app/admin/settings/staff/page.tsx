@@ -3,26 +3,32 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/utils/supabase';
-import { Loader2, Plus, Pencil, Trash2, UserCheck, UserX, KeyRound } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, UserCheck, UserX, KeyRound, Link as LinkIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function StaffManagementPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]); // For linking user accounts
   
   const [showModal, setShowModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<any>(null);
+  
   const [name, setName] = useState('');
   const [role, setRole] = useState('waiter');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState(''); 
+  const [userId, setUserId] = useState(''); // For linking auth_id
   const [submitting, setSubmitting] = useState(false);
 
   const supabase = createClient();
 
   useEffect(() => {
-    if (profile?.org_id) fetchStaff();
+    if (profile?.org_id) {
+      fetchStaff();
+      fetchUsers(); // Fetch available users to link
+    }
   }, [profile]);
 
   const fetchStaff = async () => {
@@ -38,6 +44,16 @@ export default function StaffManagementPage() {
     setLoading(false);
   };
 
+  // Fetch all users (profiles) to populate the dropdown
+  const fetchUsers = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('org_id', profile?.org_id);
+    
+    if (data) setUsers(data);
+  };
+
   const openModal = (s?: any) => {
     if (s) {
       setEditingStaff(s);
@@ -45,12 +61,14 @@ export default function StaffManagementPage() {
       setRole(s.role);
       setPhone(s.phone || '');
       setPin(s.pin_code || '');
+      setUserId(s.auth_id || '');
     } else {
       setEditingStaff(null);
       setName('');
       setRole('waiter');
       setPhone('');
       setPin('');
+      setUserId('');
     }
     setShowModal(true);
   };
@@ -70,7 +88,8 @@ export default function StaffManagementPage() {
       role, 
       phone, 
       org_id: profile?.org_id,
-      pin_code: pin || null 
+      pin_code: pin || null,
+      auth_id: userId || null // Link the user account
     };
 
     let error;
@@ -120,11 +139,18 @@ export default function StaffManagementPage() {
               <div>
                 <h3 className="font-bold text-white text-lg flex items-center gap-2">
                   {s.full_name}
-                  {/* FIX: Removed invalid 'title' prop */}
                   {s.pin_code && <KeyRound size={14} className="text-green-400" />}
+                  {s.auth_id && <LinkIcon size={14} className="text-blue-400" title="Linked Account" />}
                 </h3>
                 <p className="text-xs text-gray-400 uppercase">{s.role}</p>
                 <p className="text-sm text-gray-500 mt-1">{s.phone || 'No phone'}</p>
+                {/* Show Shift Status */}
+                <div className="mt-2 text-xs">
+                   {s.is_on_shift ? 
+                     <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded">On Shift</span> : 
+                     <span className="px-2 py-0.5 bg-gray-700 text-gray-400 rounded">Off Shift</span>
+                   }
+                </div>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => openModal(s)} className="text-blue-400 hover:text-blue-300"><Pencil size={16} /></button>
@@ -163,6 +189,24 @@ export default function StaffManagementPage() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Phone</label>
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white" type="tel" />
+              </div>
+
+              {/* Link User Account */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Link User Account (Login)</label>
+                <select 
+                  value={userId} 
+                  onChange={(e) => setUserId(e.target.value)}
+                  className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
+                >
+                  <option value="">No Account Linked</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.email} ({u.full_name || 'No Name'})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Links this profile to a login account for Shift Tracking.</p>
               </div>
 
               {/* PIN INPUT */}
