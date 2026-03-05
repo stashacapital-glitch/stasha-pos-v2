@@ -53,7 +53,7 @@ export default function RoomOrderPage() {
   }, []);
 
   const updatePendingCount = () => setPendingCount(JSON.parse(localStorage.getItem('pending_orders') || '[]').length);
-  const syncPendingOrders = async () => { /* omitted */ };
+  const syncPendingOrders = async () => { /* omitted for brevity */ };
 
   useEffect(() => { if (profile?.org_id && roomId) fetchData(); }, [profile, roomId]);
 
@@ -119,7 +119,7 @@ export default function RoomOrderPage() {
   };
   const updateQuantity = (id: string | null, delta: number) => setCart(prev => prev.map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter(item => item.quantity > 0));
   
-  // --- CALCULATION WITH TAX ---
+  // --- CALCULATION WITH TAX (FIXED FOR DECIMALS) ---
   const calculateTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     let taxAmount = 0;
@@ -128,7 +128,15 @@ export default function RoomOrderPage() {
     if (taxSettings?.tax_enabled) taxAmount = subtotal * (taxSettings.tax_rate || 0);
     if (taxSettings?.service_charge_enabled) serviceAmount = subtotal * (taxSettings.service_charge_rate || 0);
 
-    return { subtotal, taxAmount, serviceAmount, grandTotal: subtotal + taxAmount + serviceAmount };
+    // FIX: Round to 2 decimal places immediately to prevent floating point errors (e.g. 11699.699999)
+    const total = subtotal + taxAmount + serviceAmount;
+
+    return { 
+      subtotal: Math.round(subtotal * 100) / 100, 
+      taxAmount: Math.round(taxAmount * 100) / 100, 
+      serviceAmount: Math.round(serviceAmount * 100) / 100, 
+      grandTotal: Math.round(total * 100) / 100 
+    };
   };
 
   const totals = calculateTotals();
@@ -137,7 +145,7 @@ export default function RoomOrderPage() {
   const handleSubmitOrder = async () => {
     if (cart.length === 0) { toast.error('Add items first'); return; }
     if (!guest) { toast.error("Assign a guest to the room before billing."); return; }
-    if (!profile) { toast.error("User profile not found."); return; } // FIX FOR BUILD ERROR
+    if (!profile) { toast.error("User profile not found."); return; } 
     
     setSubmitting(true);
     
@@ -167,7 +175,7 @@ export default function RoomOrderPage() {
   const handlePayment = async (method: 'cash' | 'mpesa' | 'card') => {
     if (!guest) { toast.error("Assign a guest first."); return; }
     if (cart.length === 0) { toast.error('Add items first'); return; }
-    if (!profile) { toast.error("User profile not found."); return; } // FIX FOR BUILD ERROR
+    if (!profile) { toast.error("User profile not found."); return; } 
     
     setSubmitting(true);
     try {
@@ -189,6 +197,9 @@ export default function RoomOrderPage() {
     } catch (err: any) { toast.error(err.message); } finally { setSubmitting(false); }
   };
 
+  // Helper for formatting
+  const formatMoney = (amount: number) => amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   const categories = ['soft_drink', 'food', 'beer', 'cigarettes'];
@@ -196,7 +207,7 @@ export default function RoomOrderPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-900 relative">
-      {/* Guest Search Modal (Same as before) */}
+      {/* Guest Search Modal */}
       {showGuestSearch && ( <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 rounded-lg w-full max-w-sm p-4 shadow-xl border border-gray-700"><div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-white">Assign Guest</h3><button onClick={() => setShowGuestSearch(false)} className="text-gray-400 hover:text-white"><X size={18} /></button></div><div className="relative mb-2"><Search className="absolute left-3 top-3 text-gray-500" size={16} /><input type="text" placeholder="Search name or phone..." value={guestSearchQuery} onChange={(e) => { setGuestSearchQuery(e.target.value); searchGuests(e.target.value); }} className="w-full p-2 pl-9 bg-gray-700 rounded border border-gray-600 text-white" autoFocus /></div><div className="space-y-1 max-h-60 overflow-y-auto">{guestList.map(g => (<button key={g.id} onClick={() => selectGuest(g)} className="w-full text-left p-3 bg-gray-700 rounded hover:bg-purple-900 border border-transparent hover:border-purple-500 transition"><p className="font-medium text-white">{g.full_name}</p><p className="text-xs text-gray-400">{g.phone || 'No phone'}</p></button>))}</div></div></div> )}
 
       {/* Banners */}
@@ -209,7 +220,8 @@ export default function RoomOrderPage() {
           <div className="flex items-center gap-4"><div className="p-2 bg-purple-900 rounded"><Home className="text-purple-400"/></div><div><h1 className="text-xl font-bold text-white">Room {room?.room_number}</h1><p className="text-xs text-gray-400">{room?.type} - KES {room?.price_per_night}/night</p></div></div>
           <div className="text-right flex flex-col items-end gap-2">
              <button onClick={() => setShowGuestSearch(true)} className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition ${guest ? 'bg-green-800 text-green-200 border border-green-600' : 'bg-red-800 text-red-200 border border-red-600 animate-pulse'}`}>{guest ? <><User size={12} /> {guest.full_name}</> : <><AlertCircle size={12} /> Assign Guest</>}</button>
-             <p className="text-xl font-bold text-orange-400">KES {totals.grandTotal.toLocaleString()}</p>
+             {/* FIX: Format display price */}
+             <p className="text-xl font-bold text-orange-400">KES {formatMoney(totals.grandTotal)}</p>
           </div>
         </div>
       </div>
@@ -240,7 +252,7 @@ export default function RoomOrderPage() {
                        <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 bg-green-600/20 text-green-400 rounded flex items-center justify-center">+</button>
                        <span className="text-white truncate text-xs ml-1">{item.name}</span>
                     </div>
-                    <span className="text-orange-400 text-xs font-mono">KES {item.price * item.quantity}</span>
+                    <span className="text-orange-400 text-xs font-mono">KES {formatMoney(item.price * item.quantity)}</span>
                   </div>
                 ))
              )}
@@ -249,9 +261,10 @@ export default function RoomOrderPage() {
            {/* Footer */}
            <div className="flex-shrink-0 border-t border-gray-700 p-4 bg-gray-800 space-y-2">
              <div className="text-xs text-gray-400 space-y-1">
-                <div className="flex justify-between"><span>Subtotal:</span><span>KES {totals.subtotal.toLocaleString()}</span></div>
-                {taxSettings?.tax_enabled && <div className="flex justify-between text-red-400"><span>VAT ({Number(taxSettings.tax_rate) * 100}%):</span><span>KES {totals.taxAmount.toLocaleString()}</span></div>}
-                {taxSettings?.service_charge_enabled && <div className="flex justify-between text-blue-400"><span>Service ({Number(taxSettings.service_charge_rate) * 100}%):</span><span>KES {totals.serviceAmount.toLocaleString()}</span></div>}
+                {/* FIX: Format display prices */}
+                <div className="flex justify-between"><span>Subtotal:</span><span>KES {formatMoney(totals.subtotal)}</span></div>
+                {taxSettings?.tax_enabled && <div className="flex justify-between text-red-400"><span>VAT ({Number(taxSettings.tax_rate) * 100}%):</span><span>KES {formatMoney(totals.taxAmount)}</span></div>}
+                {taxSettings?.service_charge_enabled && <div className="flex justify-between text-blue-400"><span>Service ({Number(taxSettings.service_charge_rate) * 100}%):</span><span>KES {formatMoney(totals.serviceAmount)}</span></div>}
              </div>
 
              <button onClick={handleSubmitOrder} disabled={submitting || !guest} className="w-full py-3 bg-orange-500 text-black rounded font-bold disabled:opacity-50">
