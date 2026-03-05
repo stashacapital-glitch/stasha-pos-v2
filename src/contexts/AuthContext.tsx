@@ -3,16 +3,15 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js'; // Import Session type
 
-// Updated Type to include full_name
 type Profile = {
   id: string;
   org_id: string;
   role: string;
   business_name: string;
   email?: string;
-  full_name?: string; // Added full_name
+  full_name?: string;
 };
 
 type AuthContextType = {
@@ -37,7 +36,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, org_id, role, business_name, email, full_name') // Fetching full_name
+      .select('id, org_id, role, business_name, email, full_name')
       .eq('id', userId)
       .single();
     
@@ -51,7 +50,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // 1. Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
