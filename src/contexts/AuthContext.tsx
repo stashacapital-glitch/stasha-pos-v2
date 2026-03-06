@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
+import toast from 'react-hot-toast'; // FIX: Added import
 
 type Profile = {
   id: string;
@@ -42,7 +43,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       .eq('id', userId)
       .maybeSingle();
 
-    // Handle critical errors or missing profile
     if (profileError) {
       console.error("Profile fetch DB error:", JSON.stringify(profileError));
     }
@@ -50,7 +50,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!profileData) {
       console.warn("No profile found. Attempting to create one...");
       
-      // Auto-create profile if missing (Self-healing)
       const { data: userData } = await supabase.auth.getUser();
       const email = userData.user?.email || 'user@example.com';
       const newOrgId = crypto.randomUUID();
@@ -84,7 +83,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // 2. Check Staff Status (Shift + Active Check)
     const { data: staffData } = await supabase
       .from('staff')
-      .select('is_on_shift, role, is_active') // Fetch is_active
+      .select('is_on_shift, role, is_active')
       .eq('auth_id', userId)
       .maybeSingle();
 
