@@ -35,36 +35,73 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    // 1. Fetch Basic Profile
+    // 1. Fetch basic profile
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('id, org_id, role, business_name, email, full_name')
       .eq('id', userId)
       .maybeSingle();
 
-    if (profileError || !profileData) {
-      console.error("Profile fetch error", profileError);
+    // Handle critical errors or missing profile
+    if (profileError) {
+      console.error("Profile fetch DB error:", JSON.stringify(profileError));
+    }
+
+    if (!profileData) {
+      console.warn("No profile found. Attempting to create one...");
+      
+      // Auto-create profile if missing (Self-healing)
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData.user?.email || 'user@example.com';
+      const newOrgId = crypto.randomUUID();
+
+      const { data: newProfile, error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: email,
+          full_name: email.split('@')[0],
+          org_id: newOrgId,
+          role: 'admin',
+          business_name: 'My Business'
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Failed to auto-create profile:", insertError);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      
+      console.log("Profile auto-created successfully.");
+      setProfile({ ...newProfile, is_on_shift: true } as Profile);
       setLoading(false);
       return;
     }
 
-    // 2. Check if user is a Staff Member (to check shift status)
-    // We use maybeSingle() so it doesn't crash if no staff record exists (e.g. for Admins)
+    // 2. Check Staff Status (Shift + Active Check)
     const { data: staffData } = await supabase
       .from('staff')
-      .select('is_on_shift, role')
+      .select('is_on_shift, role, is_active') // Fetch is_active
       .eq('auth_id', userId)
       .maybeSingle();
 
-    // 3. Determine Shift Status
-    // If user is in staff table, use that status. 
-    // If NOT in staff table (e.g. Admin/Owner), default to TRUE (always on shift).
-    let onShift = true;
+    let onShift = true; // Default for Admins
     let userRole = profileData.role;
 
     if (staffData) {
+      // SECURITY CHECK: If staff is inactive, force logout
+      if (staffData.is_active === false) {
+        console.warn("Staff member is inactive. Blocking access.");
+        await supabase.auth.signOut();
+        toast.error("Your account has been deactivated.");
+        setLoading(false);
+        return;
+      }
+
       onShift = staffData.is_on_shift ?? false;
-      // Use staff role if available
       if (staffData.role) userRole = staffData.role;
     }
 
@@ -82,7 +119,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // 1. Check active session
     supabase.auth.getSession().then(({ data: { session }, error }: { data: { session: Session | null }, error: any }) => {
       
-      // If refresh token is invalid, sign out
       if (error) {
         console.error("Session Error:", error.message);
         supabase.auth.signOut();
