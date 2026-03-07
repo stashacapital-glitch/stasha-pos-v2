@@ -21,9 +21,10 @@ export default function POSHubPage() {
   const [foundGuests, setFoundGuests] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
 
+  // FIX: Added fallback empty string to role checks
   const isRoomManager = profile?.role === 'room_manager';
-  const canSeeTables = ['admin', 'manager', 'waiter', 'bartender'].includes(profile?.role);
-  const canSeeRooms = ['admin', 'manager', 'room_manager'].includes(profile?.role);
+  const canSeeTables = ['admin', 'manager', 'waiter', 'bartender'].includes(profile?.role || '');
+  const canSeeRooms = ['admin', 'manager', 'room_manager'].includes(profile?.role || '');
 
   useEffect(() => {
     if (profile?.org_id) {
@@ -178,7 +179,7 @@ export default function POSHubPage() {
                     <div className="grid grid-cols-2 gap-1 mt-1">
                        <Link href={`/admin/pos/room/${r.id}`} className="bg-purple-700 text-white p-1 rounded text-center text-[10px] font-bold hover:bg-purple-600">Folio</Link>
                        {/* ONLY Admin/Manager sees OUT (Payment) */}
-                       {['admin', 'manager'].includes(profile?.role) && (
+                       {['admin', 'manager'].includes(profile?.role || '') && (
                          <button onClick={() => handleCheckOut(r)} className="bg-red-700 text-white p-1 rounded text-center text-[10px] font-bold hover:bg-red-600">Out</button>
                        )}
                     </div>
