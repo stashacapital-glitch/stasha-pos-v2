@@ -28,17 +28,14 @@ export default function AdminDashboard() {
   const [isOnShift, setIsOnShift] = useState(false);
   const [shiftLoading, setShiftLoading] = useState(false);
 
-  const canSeeMoney = ['admin', 'manager'].includes(profile?.role);
-  const canSeeRooms = ['admin', 'manager', 'room_manager'].includes(profile?.role);
-  // Staff roles that need shift management
-  const isStaffRole = ['waiter', 'bartender', 'chef'].includes(profile?.role);
+  // FIX: Added fallback empty string to role checks
+  const canSeeMoney = ['admin', 'manager'].includes(profile?.role || '');
+  const canSeeRooms = ['admin', 'manager', 'room_manager'].includes(profile?.role || '');
+  const isStaffRole = ['waiter', 'bartender', 'chef'].includes(profile?.role || '');
 
   useEffect(() => {
     if (profile?.org_id) {
-      // Set shift state
       if (profile.is_on_shift !== undefined) setIsOnShift(profile.is_on_shift);
-      
-      // Load data if on shift OR if admin/manager/room_manager
       if (profile.is_on_shift || !isStaffRole) {
         fetchStats();
         setupRealtime();
@@ -135,7 +132,6 @@ export default function AdminDashboard() {
 
   if (loading && !isOnShift) return <div className="flex items-center justify-center h-screen bg-gray-900"><Loader2 className="animate-spin text-orange-400" size={48} /></div>;
 
-  // SHIFT GATE: If Staff Role AND not on shift -> Show Start Screen
   if (isStaffRole && !isOnShift) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-gray-900 text-center p-4">
@@ -159,8 +155,6 @@ export default function AdminDashboard() {
       
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-white text-center flex-1">Dashboard</h1>
-        
-        {/* END SHIFT BUTTON: Only for Staff Roles */}
         {isStaffRole && (
           <button onClick={handleEndShift} disabled={shiftLoading} className="bg-red-900 text-red-200 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 hover:bg-red-800 border border-red-700 disabled:opacity-50">
             <Square size={14} /> End Shift
