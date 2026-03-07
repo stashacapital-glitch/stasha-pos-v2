@@ -28,9 +28,10 @@ export default function RoomOrderPage() {
   const [taxSettings, setTaxSettings] = useState<any>(null);
   const [activeCategory, setActiveCategory] = useState('all');
 
-  const canPay = ['admin', 'manager'].includes(profile?.role);
-  const canBill = ['admin', 'manager', 'room_manager'].includes(profile?.role);
-  const canPrint = ['admin', 'manager', 'room_manager', 'bartender'].includes(profile?.role);
+  // FIX: Added fallback empty string to role checks
+  const canPay = ['admin', 'manager'].includes(profile?.role || '');
+  const canBill = ['admin', 'manager', 'room_manager'].includes(profile?.role || '');
+  const canPrint = ['admin', 'manager', 'room_manager', 'bartender'].includes(profile?.role || '');
 
   useEffect(() => {
     if (profile?.org_id && roomId) fetchData();
