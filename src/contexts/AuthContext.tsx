@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase';
 
-// FIX: Updated Profile interface with all fields
+// FIX: Added 'email' to the interface
 interface Profile {
   id: string;
   full_name: string;
@@ -14,6 +14,7 @@ interface Profile {
   is_on_shift?: boolean;
   address?: string;
   phone?: string;
+  email?: string; // ADDED
   tax_rate?: number;
   service_charge_rate?: number;
   tax_enabled?: boolean;
