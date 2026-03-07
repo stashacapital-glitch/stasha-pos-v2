@@ -86,7 +86,7 @@ export default function RoomOrderPage() {
     const now = new Date();
     const currentHour = now.getHours();
     
-    if (currentHour < 10) return; // Don't charge before 10 AM
+    if (currentHour < 10) return;
 
     const roomCharges = activeOrder.items?.filter((i: any) => i.id === 'room-charge') || [];
     const todayStr = now.toISOString().split('T')[0];
@@ -142,6 +142,8 @@ export default function RoomOrderPage() {
   const handleSubmit = async () => {
     if (cart.length === 0) { toast.error('Add items first'); return; }
     if (!guest) { toast.error("No guest in room."); return; }
+    if (!profile) { toast.error("User not loaded"); return; }
+
     setSubmitting(true);
     try {
       const payload = { org_id: profile.org_id, room_id: roomId, guest_id: guest?.id, items: cart, total_price: totals.grandTotal, status: 'pending', staff_id: selectedStaff?.id };
@@ -158,6 +160,8 @@ export default function RoomOrderPage() {
 
   const handlePayment = async (method: 'cash' | 'mpesa' | 'card') => {
     if (!activeOrder) { toast.error("No active bill"); return; }
+    if (!profile) { toast.error("User not loaded"); return; }
+
     setSubmitting(true);
     try {
       await supabase.from('orders').update({ status: 'paid', payment_method: method, paid_at: new Date().toISOString() }).eq('id', activeOrder.id);
