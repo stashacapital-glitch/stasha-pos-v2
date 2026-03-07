@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import PermissionGate from '@/components/PermissionGate';
 
 export default function BusinessProfilePage() {
-  const { profile, setProfile } = useAuth();
+  const { profile } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -54,8 +54,7 @@ export default function BusinessProfilePage() {
     if (error) {
       toast.error("Failed to update profile");
     } else {
-      // Update local context
-      setProfile({ ...profile, ...updates });
+      // Note: The UI will update on next page reload or navigation
       toast.success("Business details updated!");
     }
     setSaving(false);
