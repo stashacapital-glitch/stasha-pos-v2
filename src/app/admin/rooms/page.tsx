@@ -1,155 +1,161 @@
  'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Bed, User, CheckCircle, Eye } from 'lucide-react';
+import { createClient } from '@/utils/supabase';
+import { Loader2, Plus, Pencil, Trash2, BedDouble, User } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Link from 'next/link';
+import PermissionGate from '@/components/PermissionGate';
 
-type Room = {
-  id: string;
-  room_number: number;
-  status: 'vacant' | 'occupied' | 'cleaning';
-  current_guest_id: string | null;
-  guests: { full_name: string } | null;
-};
-
-export default function RoomsManagementPage() {
+export default function RoomsPage() {
   const { profile } = useAuth();
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<any>(null);
+  
+  const [roomNumber, setRoomNumber] = useState('');
+  const [type, setType] = useState('single');
+  const [price, setPrice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const supabase = createClient();
 
-  useEffect(() => {
-    if (profile?.org_id) {
-      fetchRooms();
-      
-      const channel = supabase
-        .channel('rooms-realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchRooms())
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
-    } else if (profile && !profile.org_id) {
-        toast.error("Your account has no Organization ID assigned.");
-        setLoading(false);
-    }
-  }, [profile]);
+  useEffect(() => { if (profile?.org_id) fetchRooms(); }, [profile]);
 
   const fetchRooms = async () => {
     setLoading(true);
-    
-    if (!profile?.org_id) {
-        setLoading(false);
-        return;
-    }
-
-    // FIX: Added "!current_guest_id" to specify which link to use for the guest name
     const { data, error } = await supabase
       .from('rooms')
-      .select(`
-        id,
-        room_number,
-        status,
-        current_guest_id,
-        guests!current_guest_id ( full_name )
-      `)
-      .eq('org_id', profile.org_id) 
-      .order('room_number', { ascending: true });
-
-    if (error) {
-      toast.error('Failed to load rooms: ' + error.message);
-      console.error("Database Error:", error);
-    } else {
-      setRooms(data || []);
-    }
+      .select('*, guests(id, full_name)')
+      .eq('org_id', profile?.org_id)
+      .order('room_number');
+    if (error) toast.error('Failed to load rooms');
+    setRooms(data || []);
     setLoading(false);
   };
 
-  const updateStatus = async (roomId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('rooms')
-      .update({ status: newStatus })
-      .eq('id', roomId);
+  const openModal = (room?: any) => {
+    if (room) {
+      setEditingRoom(room);
+      setRoomNumber(room.room_number);
+      setType(room.type);
+      setPrice(room.price_per_night?.toString() || '');
+    } else {
+      setEditingRoom(null);
+      setRoomNumber('');
+      setType('single');
+      setPrice('');
+    }
+    setShowModal(true);
+  };
 
-    if (error) toast.error('Failed to update status');
-    else toast.success('Room status updated');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomNumber || !price) {
+      toast.error("Room Number and Price are required");
+      return;
+    }
+
+    setSubmitting(true);
+    const payload = {
+      room_number: roomNumber,
+      type,
+      price_per_night: parseFloat(price),
+      org_id: profile?.org_id,
+      status: 'vacant'
+    };
+
+    let error;
+    if (editingRoom) {
+      const res = await supabase.from('rooms').update(payload).eq('id', editingRoom.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('rooms').insert(payload);
+      error = res.error;
+    }
+
+    if (error) {
+      toast.error("Error saving room");
+    } else {
+      toast.success("Room saved!");
+      setShowModal(false);
+      fetchRooms();
+    }
+    setSubmitting(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this room?")) return;
+    await supabase.from('rooms').delete().eq('id', id);
+    fetchRooms();
+    toast.success("Deleted");
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
-  const occupied = rooms.filter(r => r.status === 'occupied').length;
-  const vacant = rooms.filter(r => r.status === 'vacant').length;
-  const cleaning = rooms.filter(r => r.status === 'cleaning').length;
-
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-orange-400">Room Management</h1>
-        <div className="flex gap-4 text-sm">
-          <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div> Vacant ({vacant})</span>
-          <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500"></div> Occupied ({occupied})</span>
-          <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div> Cleaning ({cleaning})</span>
+    <PermissionGate allowedRoles={['admin', 'manager', 'room_manager']} fallback={<div className="p-8 text-red-400 text-center">Access Denied</div>}>
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-orange-400">Room Management</h1>
+          <button onClick={() => openModal()} className="bg-orange-500 text-black px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-orange-400">
+            <Plus size={18} /> Add Room
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {rooms.map((room) => (
+            <div key={room.id} className={`p-4 rounded-xl border shadow-sm ${room.status === 'occupied' ? 'bg-purple-900/20 border-purple-700' : 'bg-gray-800 border-gray-700'}`}>
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-2">
+                  <BedDouble className={room.status === 'occupied' ? 'text-purple-400' : 'text-gray-500'} size={20} />
+                  <h3 className="text-2xl font-bold text-white">{room.room_number}</h3>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => openModal(room)} className="text-blue-400 hover:text-blue-300"><Pencil size={14} /></button>
+                  <button onClick={() => handleDelete(room.id)} className="text-red-400 hover:text-red-300"><Trash2 size={14} /></button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 uppercase mb-2">{room.type} - KES {room.price_per_night?.toLocaleString()}</p>
+              <div className={`text-xs font-bold flex items-center gap-1 ${room.status === 'occupied' ? 'text-purple-300' : 'text-gray-500'}`}>
+                {room.status === 'occupied' ? <><User size={12}/> {room.guests?.full_name || 'Occupied'}</> : 'Vacant'}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
-        {rooms.map((room) => (
-          <div 
-            key={room.id} 
-            className={`p-4 rounded-lg border shadow-sm flex flex-col items-center text-center transition-colors
-              ${room.status === 'vacant' ? 'bg-green-900/30 border-green-700 hover:bg-green-900/50' : ''}
-              ${room.status === 'occupied' ? 'bg-red-900/30 border-red-700 hover:bg-red-900/50' : ''}
-              ${room.status === 'cleaning' ? 'bg-yellow-900/30 border-yellow-700 hover:bg-yellow-900/50' : ''}
-            `}
-          >
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-800 mb-2 border border-gray-600">
-              <Bed size={20} className={`
-                ${room.status === 'vacant' ? 'text-green-400' : ''}
-                ${room.status === 'occupied' ? 'text-red-400' : ''}
-                ${room.status === 'cleaning' ? 'text-yellow-400' : ''}
-              `} />
-            </div>
-            
-            <h3 className="text-xl font-bold text-white mb-1">{room.room_number}</h3>
-            
-            {room.status === 'occupied' && room.guests && (
-              <p className="text-xs text-gray-400 mb-2 truncate w-full">
-                <User size={10} className="inline mr-1" />{room.guests.full_name}
-              </p>
-            )}
-
-            <div className="mt-auto pt-2 w-full space-y-1">
-              
-              {room.status === 'vacant' && (
-                <Link href={`/admin/pos/room/${room.id}`} className="block w-full">
-                  <button className="w-full text-xs py-1.5 bg-blue-600 text-white rounded font-bold hover:bg-blue-500 transition">
-                    Check In
-                  </button>
-                </Link>
-              )}
-
-              {room.status === 'occupied' && (
-                 <Link href={`/admin/pos/room/${room.id}`} className="block w-full">
-                    <button className="w-full text-xs py-1.5 bg-orange-600 text-white rounded font-bold hover:bg-orange-500 transition flex items-center justify-center gap-1">
-                       <Eye size={12}/> View Bill
-                    </button>
-                 </Link>
-              )}
-
-              {room.status === 'cleaning' && (
-                <button 
-                  onClick={() => updateStatus(room.id, 'vacant')} 
-                  className="w-full text-xs py-1 bg-green-600/20 text-green-400 rounded hover:bg-green-600/40"
-                >
-                  <CheckCircle size={10} className="inline mr-1" /> Done
-                </button>
-              )}
-            </div>
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md border border-gray-700">
+            <h2 className="text-xl font-bold mb-4">{editingRoom ? 'Edit' : 'Add'} Room</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Room Number *</label>
+                <input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white" required />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Type</label>
+                <select value={type} onChange={(e) => setType(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white">
+                  <option value="single">Single</option>
+                  <option value="double">Double</option>
+                  <option value="suite">Suite</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Price per Night *</label>
+                <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white" required />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2 bg-gray-600 rounded hover:bg-gray-500 text-white">Cancel</button>
+                <button type="submit" disabled={submitting} className="flex-1 py-2 bg-orange-500 text-black font-bold rounded disabled:opacity-50">{submitting ? 'Saving...' : 'Save'}</button>
+              </div>
+            </form>
           </div>
-        ))}
-      </div>
-    </div>
+        </div>
+      )}
+    </PermissionGate>
   );
 }

@@ -3,39 +3,43 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/utils/supabase';
-import { Loader2, DollarSign, BedDouble, CookingPot, Users, Utensils, Home, TrendingUp, TrendingDown, CalendarDays, Infinity, Play, Square } from 'lucide-react';
+import { Loader2, DollarSign, BedDouble, CookingPot, Users, Utensils, TrendingUp, TrendingDown, CalendarDays, Infinity, Play, Square } from 'lucide-react';
 import Link from 'next/link';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 
 export default function AdminDashboard() {
   const { profile } = useAuth();
+  const supabase = createClient();
+
   const [loading, setLoading] = useState(true);
   
-  // Today's Stats
   const [todaysSales, setTodaysSales] = useState(0);
   const [todaysExpenses, setTodaysExpenses] = useState(0);
-  
-  // Life-to-Date Stats (All Time)
   const [totalSalesLife, setTotalSalesLife] = useState(0);
   const [totalExpensesLife, setTotalExpensesLife] = useState(0);
 
   const [occupancy, setOccupancy] = useState({ occupied: 0, total: 0 });
   const [activeOrders, setActiveOrders] = useState(0);
-  const [guestsCount, setGuestsCount] = useState(0); // FIX: Added missing state
+  const [guestsCount, setGuestsCount] = useState(0);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [salesHistory, setSalesHistory] = useState<any[]>([]);
 
-  // Shift State
   const [isOnShift, setIsOnShift] = useState(false);
   const [shiftLoading, setShiftLoading] = useState(false);
 
-  const supabase = createClient();
+  const canSeeMoney = ['admin', 'manager'].includes(profile?.role);
+  const canSeeRooms = ['admin', 'manager', 'room_manager'].includes(profile?.role);
+  // Staff roles that need shift management
+  const isStaffRole = ['waiter', 'bartender', 'chef'].includes(profile?.role);
 
   useEffect(() => {
     if (profile?.org_id) {
+      // Set shift state
       if (profile.is_on_shift !== undefined) setIsOnShift(profile.is_on_shift);
-      if (profile.is_on_shift || profile.role === 'admin') {
+      
+      // Load data if on shift OR if admin/manager/room_manager
+      if (profile.is_on_shift || !isStaffRole) {
         fetchStats();
         setupRealtime();
       } else {
@@ -68,39 +72,43 @@ export default function AdminDashboard() {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-    // 1. TODAY'S FIGURES
-    const { data: salesTodayData } = await supabase.from('orders').select('total_price').eq('org_id', profile.org_id).eq('status', 'paid').gte('paid_at', todayStart);
-    const salesTodayTotal = salesTodayData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
-    setTodaysSales(salesTodayTotal);
+    if (canSeeMoney) {
+        const { data: salesTodayData } = await supabase.from('orders').select('total_price').eq('org_id', profile.org_id).eq('status', 'paid').gte('paid_at', todayStart);
+        const salesTodayTotal = salesTodayData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
+        setTodaysSales(salesTodayTotal);
 
-    const { data: expTodayData } = await supabase.from('expenses').select('amount').eq('org_id', profile.org_id).gte('created_at', todayStart);
-    const expTodayTotal = expTodayData?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
-    setTodaysExpenses(expTodayTotal);
+        const { data: expTodayData } = await supabase.from('expenses').select('amount').eq('org_id', profile.org_id).gte('created_at', todayStart);
+        const expTodayTotal = expTodayData?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
+        setTodaysExpenses(expTodayTotal);
 
-    // 2. LIFE-TO-DATE FIGURES (ALL TIME)
-    const { data: salesAllData } = await supabase.from('orders').select('total_price').eq('org_id', profile.org_id).eq('status', 'paid');
-    const salesAllTotal = salesAllData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
-    setTotalSalesLife(salesAllTotal);
+        const { data: salesAllData } = await supabase.from('orders').select('total_price').eq('org_id', profile.org_id).eq('status', 'paid');
+        const salesAllTotal = salesAllData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
+        setTotalSalesLife(salesAllTotal);
 
-    const { data: expAllData } = await supabase.from('expenses').select('amount').eq('org_id', profile.org_id);
-    const expAllTotal = expAllData?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
-    setTotalExpensesLife(expAllTotal);
+        const { data: expAllData } = await supabase.from('expenses').select('amount').eq('org_id', profile.org_id);
+        const expAllTotal = expAllData?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
+        setTotalExpensesLife(expAllTotal);
 
-    // 3. OTHER STATS
-    const { data: roomsData } = await supabase.from('rooms').select('id, status').eq('org_id', profile.org_id);
-    const occupied = roomsData?.filter((r: any) => r.status === 'occupied').length || 0;
-    setOccupancy({ occupied, total: roomsData?.length || 0 });
+        await fetchSalesHistory();
+    }
+
+    if (canSeeRooms) {
+        const { data: roomsData } = await supabase.from('rooms').select('id, status').eq('org_id', profile.org_id);
+        const occupied = roomsData?.filter((r: any) => r.status === 'occupied').length || 0;
+        setOccupancy({ occupied, total: roomsData?.length || 0 });
+    }
 
     const { count } = await supabase.from('orders').select('id', { count: 'exact', head: true }).eq('org_id', profile.org_id).in('status', ['pending', 'preparing', 'ready']);
     setActiveOrders(count || 0);
 
-    const { count: guestCount } = await supabase.from('guests').select('id', { count: 'exact', head: true }).eq('org_id', profile.org_id);
-    setGuestsCount(guestCount || 0);
+    if (canSeeRooms) {
+        const { count: guestCount } = await supabase.from('guests').select('id', { count: 'exact', head: true }).eq('org_id', profile.org_id);
+        setGuestsCount(guestCount || 0);
+    }
 
     const { data: recent } = await supabase.from('orders').select('id, created_at, total_price, status, guests(full_name), rooms(room_number)').eq('org_id', profile.org_id).order('created_at', { ascending: false }).limit(5);
     setRecentOrders(recent || []);
 
-    await fetchSalesHistory();
     setLoading(false);
   };
 
@@ -127,7 +135,8 @@ export default function AdminDashboard() {
 
   if (loading && !isOnShift) return <div className="flex items-center justify-center h-screen bg-gray-900"><Loader2 className="animate-spin text-orange-400" size={48} /></div>;
 
-  if (!isOnShift) {
+  // SHIFT GATE: If Staff Role AND not on shift -> Show Start Screen
+  if (isStaffRole && !isOnShift) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-gray-900 text-center p-4">
         <div className="bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-xl max-w-sm">
@@ -150,61 +159,74 @@ export default function AdminDashboard() {
       
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-white text-center flex-1">Dashboard</h1>
-        <button onClick={handleEndShift} disabled={shiftLoading} className="bg-red-900 text-red-200 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 hover:bg-red-800 border border-red-700 disabled:opacity-50"><Square size={14} /> End Shift</button>
+        
+        {/* END SHIFT BUTTON: Only for Staff Roles */}
+        {isStaffRole && (
+          <button onClick={handleEndShift} disabled={shiftLoading} className="bg-red-900 text-red-200 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 hover:bg-red-800 border border-red-700 disabled:opacity-50">
+            <Square size={14} /> End Shift
+          </button>
+        )}
       </div>
 
-      {/* ROW 1: TODAY'S SNAPSHOT */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-400 mb-3 flex items-center gap-2"><CalendarDays size={18} /> Today's Performance</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
-            <TrendingUp className="text-green-400 mb-1" size={24} />
-            <p className="text-gray-500 text-xs">Sales</p>
-            <p className="text-xl font-bold text-white">KES {formatMoney(todaysSales)}</p>
+      {/* FINANCIALS ROW (Admin/Manager Only) */}
+      {canSeeMoney && (
+        <>
+          <div className="mb-6">
+            <h2 className="text-lg font-bold text-gray-400 mb-3 flex items-center gap-2"><CalendarDays size={18} /> Today's Performance</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
+                <TrendingUp className="text-green-400 mb-1" size={24} />
+                <p className="text-gray-500 text-xs">Sales</p>
+                <p className="text-xl font-bold text-white mt-1">KES {formatMoney(todaysSales)}</p>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
+                <TrendingDown className="text-red-400 mb-1" size={24} />
+                <p className="text-gray-500 text-xs">Expenses</p>
+                <p className="text-xl font-bold text-white mt-1">KES {formatMoney(todaysExpenses)}</p>
+              </div>
+              <div className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center ${netToday >= 0 ? 'bg-green-900/30 border-green-700' : 'bg-red-900/30 border-red-700'}`}>
+                <DollarSign className={`mb-1 ${netToday >= 0 ? 'text-green-300' : 'text-red-300'}`} size={24} />
+                <p className={`text-xs ${netToday >= 0 ? 'text-green-300' : 'text-red-300'}`}>Net Profit</p>
+                <p className={`text-xl font-bold mt-1 ${netToday >= 0 ? 'text-green-400' : 'text-red-400'}`}>KES {formatMoney(Math.abs(netToday))}</p>
+              </div>
+            </div>
           </div>
-          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
-            <TrendingDown className="text-red-400 mb-1" size={24} />
-            <p className="text-gray-500 text-xs">Expenses</p>
-            <p className="text-xl font-bold text-white">KES {formatMoney(todaysExpenses)}</p>
-          </div>
-          <div className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center ${netToday >= 0 ? 'bg-green-900/30 border-green-700' : 'bg-red-900/30 border-red-700'}`}>
-            <DollarSign className={`mb-1 ${netToday >= 0 ? 'text-green-300' : 'text-red-300'}`} size={24} />
-            <p className={`text-xs ${netToday >= 0 ? 'text-green-300' : 'text-red-300'}`}>Net Profit</p>
-            <p className={`text-xl font-bold ${netToday >= 0 ? 'text-green-400' : 'text-red-400'}`}>KES {formatMoney(Math.abs(netToday))}</p>
-          </div>
-        </div>
-      </div>
 
-      {/* ROW 2: LIFE TO DATE */}
-      <div className="mb-8">
-        <h2 className="text-lg font-bold text-gray-400 mb-3 flex items-center gap-2"><Infinity size={18} /> Life to Date (All Time)</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
-            <p className="text-gray-500 text-xs">Total Sales</p>
-            <p className="text-xl font-bold text-white">KES {formatMoney(totalSalesLife)}</p>
+          <div className="mb-8">
+            <h2 className="text-lg font-bold text-gray-400 mb-3 flex items-center gap-2"><Infinity size={18} /> Life to Date</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
+                <p className="text-gray-500 text-xs">Total Sales</p>
+                <p className="text-xl font-bold text-white mt-1">KES {formatMoney(totalSalesLife)}</p>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
+                <p className="text-gray-500 text-xs">Total Expenses</p>
+                <p className="text-xl font-bold text-white mt-1">KES {formatMoney(totalExpensesLife)}</p>
+              </div>
+              <div className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center ${netLife >= 0 ? 'bg-blue-900/30 border-blue-700' : 'bg-red-900/30 border-red-700'}`}>
+                <p className={`text-xs ${netLife >= 0 ? 'text-blue-300' : 'text-red-300'}`}>Net Profit/Loss</p>
+                <p className={`text-xl font-bold mt-1 ${netLife >= 0 ? 'text-blue-400' : 'text-red-400'}`}>KES {formatMoney(Math.abs(netLife))}</p>
+              </div>
+            </div>
           </div>
-          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
-            <p className="text-gray-500 text-xs">Total Expenses</p>
-            <p className="text-xl font-bold text-white">KES {formatMoney(totalExpensesLife)}</p>
-          </div>
-          <div className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center ${netLife >= 0 ? 'bg-blue-900/30 border-blue-700' : 'bg-red-900/30 border-red-700'}`}>
-            <p className={`text-xs ${netLife >= 0 ? 'text-blue-300' : 'text-red-300'}`}>Net Profit/Loss</p>
-            <p className={`text-xl font-bold ${netLife >= 0 ? 'text-blue-400' : 'text-red-400'}`}>KES {formatMoney(Math.abs(netLife))}</p>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* OTHER STATS GRID */}
+      {/* OPERATIONAL STATS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
-          <BedDouble className="text-purple-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Rooms</p><p className="text-xl font-bold text-white">{occupancy.occupied} / {occupancy.total}</p>
-        </div>
+        {canSeeRooms && (
+          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center">
+            <BedDouble className="text-purple-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Rooms</p><p className="text-xl font-bold text-white mt-1">{occupancy.occupied} / {occupancy.total}</p>
+          </div>
+        )}
         <Link href="/admin/kds" className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center hover:border-orange-500 cursor-pointer">
-          <CookingPot className="text-orange-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Kitchen</p><p className="text-xl font-bold text-white">{activeOrders}</p>
+          <CookingPot className="text-orange-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Kitchen</p><p className="text-xl font-bold text-white mt-1">{activeOrders}</p>
         </Link>
-        <Link href="/admin/settings/guests" className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center hover:border-blue-500 cursor-pointer col-span-2">
-          <Users className="text-blue-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Total Guests</p><p className="text-xl font-bold text-white">{guestsCount}</p>
-        </Link>
+        {canSeeRooms && (
+          <Link href="/admin/settings/guests" className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center hover:border-blue-500 cursor-pointer col-span-2 lg:col-span-2">
+            <Users className="text-blue-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Total Guests</p><p className="text-xl font-bold text-white mt-1">{guestsCount}</p>
+          </Link>
+        )}
       </div>
 
       {/* MAIN CONTENT AREA */}
@@ -212,16 +234,18 @@ export default function AdminDashboard() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <Link href="/admin/pos" className="bg-orange-500 hover:bg-orange-600 text-black font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><Utensils size={20} /> POS</Link>
-              <Link href="/admin/rooms" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><Home size={20} /> Rooms</Link>
               <Link href="/admin/kds" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><CookingPot size={20} /> Kitchen</Link>
-              <Link href="/admin/reports" className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><TrendingUp size={20} /> Reports</Link>
+              {canSeeMoney && (
+                <Link href="/admin/reports" className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><TrendingUp size={20} /> Reports</Link>
+              )}
             </div>
           </div>
-          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 min-h-[300px]">
-            <h3 className="text-lg font-bold text-white mb-4">Sales (Last 7 Days)</h3>
-            {salesHistory.length > 0 ? (
+
+          {canSeeMoney && salesHistory.length > 0 && (
+            <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 min-h-[300px]">
+              <h3 className="text-lg font-bold text-white mb-4">Sales (Last 7 Days)</h3>
               <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={salesHistory}>
                   <defs><linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.8}/><stop offset="95%" stopColor="#f97316" stopOpacity={0}/></linearGradient></defs>
@@ -232,9 +256,10 @@ export default function AdminDashboard() {
                   <Area type="monotone" dataKey="sales" stroke="#f97316" fillOpacity={1} fill="url(#colorSales)" />
                 </AreaChart>
               </ResponsiveContainer>
-            ) : ( <div className="h-full flex items-center justify-center text-gray-500">Loading...</div> )}
-          </div>
+            </div>
+          )}
         </div>
+
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 h-fit">
           <h3 className="text-lg font-bold text-white mb-4">Recent Orders</h3>
           <div className="space-y-3">
@@ -243,7 +268,7 @@ export default function AdminDashboard() {
                 <div key={o.id} className="border-b border-gray-700 pb-2 last:border-0">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-white text-sm font-medium">{o.guests?.full_name || 'Guest'} {o.rooms && <span className="text-purple-400 text-xs">(Rm {o.rooms.room_number})</span>}</p>
+                      <p className="text-white text-sm font-medium">{o.guests?.full_name || 'Guest'} {o.rooms && <span className="text-purple-400 text-xs ml-1">(Rm {o.rooms.room_number})</span>}</p>
                       <p className="text-gray-500 text-xs">{new Date(o.created_at).toLocaleTimeString()}</p>
                     </div>
                     <div className="text-right">
