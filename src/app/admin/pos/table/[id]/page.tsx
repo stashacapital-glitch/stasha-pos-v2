@@ -9,7 +9,6 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function TableOrderPage() {
-  // Initialize inside component
   const supabase = createClient();
   const { profile } = useAuth();
   const params = useParams();
@@ -29,10 +28,10 @@ export default function TableOrderPage() {
   const [foundGuests, setFoundGuests] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
 
-  // Permissions
-  const canPay = ['admin', 'manager'].includes(profile?.role);
-  const canBill = ['admin', 'manager', 'waiter', 'bartender'].includes(profile?.role);
-  const canPostToRoom = ['admin', 'manager', 'waiter', 'bartender'].includes(profile?.role);
+  // FIX: Added fallback empty string to role checks
+  const canPay = ['admin', 'manager'].includes(profile?.role || '');
+  const canBill = ['admin', 'manager', 'waiter', 'bartender'].includes(profile?.role || '');
+  const canPostToRoom = ['admin', 'manager', 'waiter', 'bartender'].includes(profile?.role || '');
 
   useEffect(() => {
     if (profile?.org_id && tableId) fetchData();
@@ -81,6 +80,8 @@ export default function TableOrderPage() {
   // --- SUBMIT ORDER (WAITER) ---
   const handleSubmit = async () => {
     if (cart.length === 0) return;
+    if (!profile) { toast.error("User not loaded"); return; }
+    
     setSubmitting(true);
     try {
       const payload = {
@@ -108,6 +109,8 @@ export default function TableOrderPage() {
   // --- PAYMENT (MANAGER) ---
   const handlePayment = async (method: 'cash' | 'mpesa' | 'card') => {
     if (!activeOrder) { toast.error("No active bill"); return; }
+    if (!profile) { toast.error("User not loaded"); return; }
+    
     setSubmitting(true);
     try {
       await supabase.from('orders').update({ 
