@@ -45,9 +45,7 @@ export default function ReportsPage() {
       .lte('created_at', `${endDate}T23:59:59`);
 
     // 3. Calculate Totals
-    // FIX: Explicitly type 'sum' and item 'o'
     const totalSales = ordersData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
-    // FIX: Explicitly type 'sum' and item 'e'
     const totalExp = expenseData?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
     
     setSales(totalSales);
@@ -56,7 +54,8 @@ export default function ReportsPage() {
 
     // 4. Calculate Top Selling Items
     const itemCounts: Record<string, number> = {};
-    ordersData?.forEach(order => {
+    // FIX: Explicitly type 'order' as any
+    ordersData?.forEach((order: any) => {
         (order.items || []).forEach((item: any) => {
             const name = item.name || 'Unknown';
             itemCounts[name] = (itemCounts[name] || 0) + (item.quantity || 1);
