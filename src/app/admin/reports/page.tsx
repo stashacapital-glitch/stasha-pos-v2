@@ -45,8 +45,10 @@ export default function ReportsPage() {
       .lte('created_at', `${endDate}T23:59:59`);
 
     // 3. Calculate Totals
-    const totalSales = ordersData?.reduce((sum, o) => sum + (o.total_price || 0), 0) || 0;
-    const totalExp = expenseData?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+    // FIX: Explicitly type 'sum' and item 'o'
+    const totalSales = ordersData?.reduce((sum: number, o: any) => sum + (o.total_price || 0), 0) || 0;
+    // FIX: Explicitly type 'sum' and item 'e'
+    const totalExp = expenseData?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
     
     setSales(totalSales);
     setExpenses(totalExp);
