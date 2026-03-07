@@ -37,8 +37,8 @@ export default function ExpensesPage() {
     
     if (data) {
       setExpenses(data);
-      // FIX: Explicitly type 'sum' as number
-      const total = data.reduce((sum: number, e) => sum + (e.amount || 0), 0);
+      // FIX: Explicitly type 'sum' and 'e'
+      const total = data.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
       setTotalExpenses(total);
     }
     setLoading(false);
