@@ -5,6 +5,7 @@ import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 
+// Updated Profile interface with plan_type
 interface Profile {
   id: string;
   full_name: string;
@@ -18,6 +19,7 @@ interface Profile {
   tax_rate?: number;
   service_charge_rate?: number;
   tax_enabled?: boolean;
+  plan_type?: string; // ADDED
 }
 
 interface AuthContextType {
@@ -57,7 +59,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       } catch (error: any) {
         console.error("Session fetch error:", error.message);
-        // If refresh token is invalid, force logout
         if (error.message.includes('Refresh Token') || error.message.includes('Not Found')) {
            await supabase.auth.signOut();
            router.push('/login');
