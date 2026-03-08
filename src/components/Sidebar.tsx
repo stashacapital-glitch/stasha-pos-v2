@@ -39,26 +39,22 @@ export default function Sidebar({ isOpen, onClose }: Props) {
   const navItems = [
     { name: 'Dashboard', href: '/admin', icon: Home, roles: null, feature: null },
     { name: 'POS', href: '/admin/pos', icon: Utensils, roles: ['admin', 'manager', 'room_manager', 'waiter', 'bartender'], feature: 'pos' },
-    { name: 'Kitchen', href: '/admin/kds', icon: ChefHat, roles: null, feature: 'kds' }, // Feature Gate Applied
+    { name: 'Kitchen', href: '/admin/kds', icon: ChefHat, roles: null, feature: 'kds' },
     { name: 'Reports', href: '/admin/reports', icon: TrendingUp, roles: ['admin', 'manager'], feature: 'pos' },
     { name: 'Expenses', href: '/admin/expenses', icon: DollarSign, roles: ['admin', 'manager'], feature: 'pos' },
     { name: 'Payroll', href: '/admin/payroll', icon: CreditCard, roles: ['admin', 'manager'], feature: 'payroll' },
     { name: 'Tax Reports', href: '/admin/reports/tax', icon: FileText, roles: ['admin', 'manager'], feature: 'tax' },
     { name: 'Stock', href: '/admin/stock', icon: Package, roles: ['admin', 'manager', 'chef', 'bartender'], feature: 'stock' },
     { name: 'Recipes', href: '/admin/settings/recipes', icon: BookOpen, roles: ['admin', 'manager', 'chef'], feature: 'stock' },
-    { name: 'Guests', href: '/admin/settings/guests', icon: Users, roles: ['admin', 'manager', 'room_manager'], feature: 'rooms' }, // Feature Gate Applied
+    { name: 'Guests', href: '/admin/settings/guests', icon: Users, roles: ['admin', 'manager', 'room_manager'], feature: 'rooms' },
     { name: 'Billing', href: '/pricing', icon: Zap, roles: ['admin', 'manager'], feature: null },
     { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['admin', 'manager'], feature: null },
   ];
 
   const filteredItems = navItems.filter(item => {
-    // 1. Role Check
     if (item.roles && !profile?.role) return false;
     if (item.roles && !item.roles.includes(profile?.role || '')) return false;
-
-    // 2. Feature Gate Check (The new logic)
     if (item.feature && !hasFeature(currentPlan, item.feature as any)) return false;
-
     return true;
   });
 
