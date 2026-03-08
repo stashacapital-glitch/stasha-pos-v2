@@ -13,7 +13,9 @@ import {
   Package,
   TrendingUp,
   LogOut,
-  BookOpen
+  BookOpen,
+  CreditCard,
+  FileText
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase';
@@ -31,15 +33,16 @@ export default function Sidebar({ isOpen, onClose }: Props) {
 
   const navItems = [
     { name: 'Dashboard', href: '/admin', icon: Home, roles: null }, // Everyone
-    // CHEF REMOVED FROM POS
     { name: 'POS', href: '/admin/pos', icon: Utensils, roles: ['admin', 'manager', 'room_manager', 'waiter', 'bartender'] },
     { name: 'Kitchen', href: '/admin/kds', icon: ChefHat, roles: null }, // Everyone
-    // NEW: RECIPES LINK (Chef can access)
-    { name: 'Recipes', href: '/admin/settings/recipes', icon: BookOpen, roles: ['admin', 'manager', 'chef'] },
     { name: 'Reports', href: '/admin/reports', icon: TrendingUp, roles: ['admin', 'manager'] },
     { name: 'Expenses', href: '/admin/expenses', icon: DollarSign, roles: ['admin', 'manager'] },
-    // CHEF HAS STOCK ACCESS
+    // NEW FEATURES - Admin & Manager Only
+    { name: 'Payroll', href: '/admin/payroll', icon: CreditCard, roles: ['admin', 'manager'] },
+    { name: 'Tax Reports', href: '/admin/reports/tax', icon: FileText, roles: ['admin', 'manager'] },
+    // ------------------
     { name: 'Stock', href: '/admin/stock', icon: Package, roles: ['admin', 'manager', 'chef', 'bartender'] },
+    { name: 'Recipes', href: '/admin/settings/recipes', icon: BookOpen, roles: ['admin', 'manager', 'chef'] },
     { name: 'Guests', href: '/admin/settings/guests', icon: Users, roles: ['admin', 'manager', 'room_manager'] },
     { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['admin', 'manager'] },
   ];

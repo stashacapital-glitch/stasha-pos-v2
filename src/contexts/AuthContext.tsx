@@ -3,8 +3,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase';
+import { useRouter } from 'next/navigation';
 
-// Profile interface
 interface Profile {
   id: string;
   full_name: string;
@@ -40,35 +40,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+  const router = useRouter();
 
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      } else {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (error: any) {
+        console.error("Session fetch error:", error.message);
+        // If refresh token is invalid, force logout
+        if (error.message.includes('Refresh Token') || error.message.includes('Not Found')) {
+           await supabase.auth.signOut();
+           router.push('/login');
+        }
         setLoading(false);
       }
     };
 
     getSession();
 
-    // FIX: Explicitly type 'event' and 'session'
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
         setProfile(null);
         setLoading(false);
+      } else if (session) {
+        setSession(session);
+        setUser(session.user);
+        fetchProfile(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
   const fetchProfile = async (userId: string) => {
     try {
