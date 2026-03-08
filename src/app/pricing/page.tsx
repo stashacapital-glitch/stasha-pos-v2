@@ -1,7 +1,7 @@
  'use client';
 
 import { useState } from 'react';
-import { Check, X, Zap, Star, ArrowRight, Users, BedDouble, ChefHat, FileText, Wifi } from 'lucide-react';
+import { Check, X, Zap, Star, ArrowRight, Users, BedDouble, ChefHat, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 export default function PricingPage() {
@@ -25,6 +25,9 @@ export default function PricingPage() {
   ];
 
   const plans = [
+    // ==================================================
+    // BASIC PLAN: 3 Users, Stock, Offline. No Tables/KDS
+    // ==================================================
     {
       id: 'basic',
       name: 'Basic',
@@ -32,10 +35,22 @@ export default function PricingPage() {
       description: 'Essential tools for small cafes.',
       highlight: false,
       values: {
-        pos: true, users: '3 Users', stock: true, autoDeduct: true, offline: true,
-        tables: false, kds: false, rooms: false, payroll: false, tax: false, multiBranch: false,
+        pos: true, 
+        users: '3 Users',        // <--- YOU ASKED FOR 3 USERS
+        stock: true, 
+        autoDeduct: true, 
+        offline: true,
+        tables: false,           // <--- NO TABLES
+        kds: false,              // <--- NO KDS
+        rooms: false, 
+        payroll: false, 
+        tax: false, 
+        multiBranch: false,
       },
     },
+    // ==================================================
+    // STANDARD PLAN: 5 Users, Stock, Offline, 5 Tables. No KDS
+    // ==================================================
     {
       id: 'standard',
       name: 'Standard',
@@ -43,10 +58,22 @@ export default function PricingPage() {
       description: 'Waiter service & table management.',
       highlight: false,
       values: {
-        pos: true, users: '5 Users', stock: true, autoDeduct: true, offline: true,
-        tables: '5 Tables', kds: false, rooms: false, payroll: false, tax: false, multiBranch: false,
+        pos: true, 
+        users: '5 Users',        // <--- YOU ASKED FOR 5 USERS
+        stock: true, 
+        autoDeduct: true, 
+        offline: true,
+        tables: '5 Tables',      // <--- YOU ASKED FOR 5 TABLES
+        kds: false,              // <--- NO KDS
+        rooms: false, 
+        payroll: false, 
+        tax: false, 
+        multiBranch: false,
       },
     },
+    // ==================================================
+    // REGULAR PLAN: 10 Users, Stock, Offline, KDS. No Rooms
+    // ==================================================
     {
       id: 'regular',
       name: 'Regular',
@@ -54,10 +81,22 @@ export default function PricingPage() {
       description: 'Kitchen operations streamlined.',
       highlight: true,
       values: {
-        pos: true, users: '10 Users', stock: true, autoDeduct: true, offline: true,
-        tables: 'Unlimited', kds: true, rooms: false, payroll: false, tax: false, multiBranch: false,
+        pos: true, 
+        users: '10 Users',       // <--- YOU ASKED FOR 10 USERS
+        stock: true, 
+        autoDeduct: true, 
+        offline: true,
+        tables: 'Unlimited',
+        kds: true,               // <--- KDS INCLUDED
+        rooms: false,            // <--- NO ROOMS
+        payroll: false, 
+        tax: false, 
+        multiBranch: false,
       },
     },
+    // ==================================================
+    // PRO PLAN: All Features
+    // ==================================================
     {
       id: 'pro',
       name: 'Pro',
@@ -65,8 +104,17 @@ export default function PricingPage() {
       description: 'Full hotel & enterprise suite.',
       highlight: false,
       values: {
-        pos: true, users: 'Unlimited', stock: true, autoDeduct: true, offline: true,
-        tables: 'Unlimited', kds: true, rooms: true, payroll: true, tax: true, multiBranch: true,
+        pos: true, 
+        users: 'Unlimited',
+        stock: true, 
+        autoDeduct: true, 
+        offline: true,
+        tables: 'Unlimited',
+        kds: true,
+        rooms: true,             // <--- ROOMS INCLUDED
+        payroll: true,           // <--- PAYROLL INCLUDED
+        tax: true,               // <--- TAX INCLUDED
+        multiBranch: true,
       },
     },
   ];
