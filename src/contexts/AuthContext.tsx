@@ -1,10 +1,10 @@
  'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase';
 
-// FIX: Added 'email' to the interface
+// Profile interface
 interface Profile {
   id: string;
   full_name: string;
@@ -14,7 +14,7 @@ interface Profile {
   is_on_shift?: boolean;
   address?: string;
   phone?: string;
-  email?: string; // ADDED
+  email?: string;
   tax_rate?: number;
   service_charge_rate?: number;
   tax_enabled?: boolean;
@@ -55,7 +55,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // FIX: Explicitly type 'event' and 'session'
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
