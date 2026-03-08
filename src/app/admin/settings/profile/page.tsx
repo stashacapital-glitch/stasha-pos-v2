@@ -26,8 +26,9 @@ export default function BusinessProfilePage() {
       setBusinessName(profile.business_name || '');
       setAddress(profile.address || '');
       setPhone(profile.phone || '');
-      setTaxRate((profile.tax_rate * 100).toFixed(0));
-      setServiceCharge((profile.service_charge_rate * 100).toFixed(0));
+      // FIX: Handle undefined with default 0
+      setTaxRate(((profile.tax_rate || 0) * 100).toFixed(0));
+      setServiceCharge(((profile.service_charge_rate || 0) * 100).toFixed(0));
       setTaxEnabled(profile.tax_enabled || false);
       setLoading(false);
     }
@@ -54,7 +55,6 @@ export default function BusinessProfilePage() {
     if (error) {
       toast.error("Failed to update profile");
     } else {
-      // Note: The UI will update on next page reload or navigation
       toast.success("Business details updated!");
     }
     setSaving(false);
