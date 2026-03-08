@@ -5,8 +5,12 @@ import { Check, X, Zap, Star, ArrowRight, Users, BedDouble, ChefHat, FileText, W
 import Link from 'next/link';
 
 export default function PricingPage() {
-  // Feature definitions
-  const allFeatures = [
+
+  // Define the keys allowed in our values object
+  type FeatureKey = 'pos' | 'users' | 'stock' | 'autoDeduct' | 'offline' | 'tables' | 'kds' | 'rooms' | 'payroll' | 'tax' | 'multiBranch';
+
+  // Feature definitions for comparison
+  const allFeatures: { name: string; key: FeatureKey }[] = [
     { name: 'POS (Order Taking)', key: 'pos' },
     { name: 'User Accounts', key: 'users' },
     { name: 'Stock Management', key: 'stock' },
