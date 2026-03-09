@@ -2,34 +2,43 @@
 
 import PermissionGate from '@/components/PermissionGate';
 import Link from 'next/link';
-import { Users, Utensils, BedDouble, Settings2, UserPlus, Table } from 'lucide-react';
+import { Users, Utensils, BedDouble, Settings2, UserPlus, Table, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { hasFeature } from '@/lib/plans';
 
 export default function SettingsHubPage() {
   const { activePlan } = useAuth();
   
+  // FIX: Cast activePlan to the correct type
+  const currentPlan = (activePlan || 'basic') as 'basic' | 'standard' | 'regular' | 'pro';
+
   // Define settings cards with feature requirements
   const settingsCards = [
-    { name: 'Team Management', href: '/admin/settings/staff', icon: Users, desc: 'Manage staff & logins', color: 'text-blue-400', feature: null }, // Always visible to admin/mgr
+    { name: 'Team Management', href: '/admin/settings/staff', icon: Users, desc: 'Manage staff & logins', color: 'text-blue-400', feature: null }, 
     { name: 'Business Profile', href: '/admin/settings/profile', icon: Settings2, desc: 'Name, Tax & Receipt', color: 'text-green-400', feature: null },
-    { name: 'Menu Management', href: '/admin/settings/menu', icon: Utensils, desc: 'Edit items & prices', color: 'text-orange-400', feature: 'stock' }, // Requires Stock feature
-    { name: 'Table Setup', href: '/admin/settings/tables', icon: Table, desc: 'Configure restaurant tables', color: 'text-purple-400', feature: 'tables' }, // Requires Tables feature
-    { name: 'Room Setup', href: '/admin/settings/rooms', icon: BedDouble, desc: 'Add or edit rooms', color: 'text-purple-400', feature: 'rooms' }, // Requires Rooms feature
-    { name: 'Guest Management', href: '/admin/settings/guests', icon: UserPlus, desc: 'Manage guests', color: 'text-green-400', feature: 'guests' }, // Requires Guests feature
+    { name: 'Menu Management', href: '/admin/settings/menu', icon: Utensils, desc: 'Edit items & prices', color: 'text-orange-400', feature: 'stock' },
+    { name: 'Table Setup', href: '/admin/settings/tables', icon: Table, desc: 'Configure restaurant tables', color: 'text-purple-400', feature: 'tables' },
+    { name: 'Room Setup', href: '/admin/settings/rooms', icon: BedDouble, desc: 'Add or edit rooms', color: 'text-purple-400', feature: 'rooms' },
+    { name: 'Guest Management', href: '/admin/settings/guests', icon: UserPlus, desc: 'Manage guests', color: 'text-green-400', feature: 'guests' },
   ];
 
   // Filter cards based on the active plan
   const visibleCards = settingsCards.filter(card => {
     if (!card.feature) return true; // Always show if no feature lock
-    return hasFeature(activePlan, card.feature as any);
+    // FIX: Assert feature key as 'any' to satisfy TypeScript union type
+    return hasFeature(currentPlan, card.feature as any);
   });
 
   return (
     <PermissionGate allowedRoles={['admin', 'manager', 'room_manager']} fallback={<div className="p-8 text-red-400 text-center">Access Denied.</div>}>
       <div className="h-full overflow-y-auto bg-gray-900">
         <div className="p-6 md:p-8 max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
+          <div className="flex items-center gap-4 mb-8">
+             <Link href="/admin" className="p-2 bg-gray-800 rounded-lg border border-gray-700 hover:bg-gray-700 transition">
+                <ArrowLeft size={20} className="text-gray-400" />
+             </Link>
+             <h1 className="text-3xl font-bold text-white">Settings</h1>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {visibleCards.map((card) => (
