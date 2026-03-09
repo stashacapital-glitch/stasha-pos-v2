@@ -115,16 +115,19 @@ export default function QuickSalePage() {
 
       if (orderError) throw orderError;
 
-      const itemIds = cart.map(i => i.id);
+      const itemIds = cart.map((i: any) => i.id);
       const { data: allRecipes } = await supabase.from('recipes').select('menu_item_id, ingredient_id, quantity').in('menu_item_id', itemIds);
       
-      // FIX: Explicitly type the array as Promise<any>[]
       const deductionOperations: Promise<any>[] = [];
       
-      cart.forEach(item => {
-        const relatedRecipes = allRecipes?.filter(r => r.menu_item_id === item.id);
+      // Explicitly type 'item' as any
+      cart.forEach((item: any) => {
+        // Explicitly type 'r' as any
+        const relatedRecipes = allRecipes?.filter((r: any) => r.menu_item_id === item.id);
+        
         if (relatedRecipes && relatedRecipes.length > 0) {
-          relatedRecipes.forEach(ing => {
+          // Explicitly type 'ing' as any
+          relatedRecipes.forEach((ing: any) => {
             deductionOperations.push(
               supabase.rpc('deduct_stock', { item_id: ing.ingredient_id, qty: ing.quantity * item.quantity })
             );
@@ -215,7 +218,7 @@ export default function QuickSalePage() {
               {results.length === 0 ? (
                 <p className="text-gray-500 text-center text-sm py-4">No items found</p>
               ) : (
-                results.map(item => (
+                results.map((item: any) => (
                   <button 
                     key={item.id} 
                     onClick={() => addToCart(item)}
@@ -255,7 +258,7 @@ export default function QuickSalePage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {cart.map((item, idx) => (
+                  {cart.map((item: any, idx: number) => (
                     <div key={idx} className="flex items-center justify-between bg-gray-900 p-3 rounded-lg border border-gray-800">
                       <div className="flex-1 min-w-0 mr-2">
                         <p className="text-white text-sm font-medium truncate">{item.name}</p>
