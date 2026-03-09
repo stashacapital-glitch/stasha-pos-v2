@@ -15,7 +15,6 @@ export default function StaffManagementPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   
-  // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('waiter');
@@ -55,11 +54,17 @@ export default function StaffManagementPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Safety Check
+    if (!profile?.org_id) {
+      toast.error("Organization ID missing. Please log in again.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       if (editingId) {
-        // Update existing staff
         const { error } = await supabase
           .from('staff')
           .update({ full_name: fullName, role })
@@ -67,21 +72,30 @@ export default function StaffManagementPage() {
         if (error) throw error;
         toast.success('Staff updated');
       } else {
-        // Create new staff
-        const { error } = await supabase.from('staff').insert({
-          org_id: profile?.org_id,
+        // Insert
+        const payload = {
+          org_id: profile.org_id,
           full_name: fullName,
           role,
           email,
           is_active: true
-        });
-        if (error) throw error;
+        };
+        
+        console.log("Saving payload:", payload); // Debug log
+        
+        const { error } = await supabase.from('staff').insert(payload);
+        
+        if (error) {
+            console.error("Supabase Insert Error:", error); // Debug log
+            throw error;
+        }
         toast.success('Staff added');
       }
       setShowModal(false);
       fetchStaff();
     } catch (err: any) {
-      toast.error(err.message);
+      console.error("Final Catch Error:", err);
+      toast.error(err.message || "Unknown database error");
     } finally {
       setSubmitting(false);
     }
@@ -121,7 +135,11 @@ export default function StaffManagementPage() {
                 <tr key={s.id} className="hover:bg-gray-700/50">
                   <td className="p-4 text-white font-medium">{s.full_name}</td>
                   <td className="p-4">
-                    <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-900/50 text-blue-300 border border-blue-700">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        s.role === 'admin' ? 'bg-red-900/50 text-red-300 border border-red-700' : 
+                        s.role === 'manager' ? 'bg-blue-900/50 text-blue-300 border border-blue-700' : 
+                        'bg-gray-700 text-gray-300'
+                    }`}>
                         {s.role}
                     </span>
                   </td>
@@ -156,6 +174,7 @@ export default function StaffManagementPage() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Role</label>
                 <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white">
+                  <option value="admin">Admin</option>
                   <option value="manager">Manager</option>
                   <option value="room_manager">Room Manager</option>
                   <option value="waiter">Waiter</option>

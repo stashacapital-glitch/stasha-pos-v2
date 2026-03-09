@@ -18,7 +18,7 @@ interface Profile {
   tax_rate?: number;
   service_charge_rate?: number;
   tax_enabled?: boolean;
-  plan_type?: string; // <--- THIS IS THE FIX
+  plan_type?: string;
 }
 
 interface AuthContextType {
@@ -26,6 +26,8 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  switchPlan: (plan: string) => void; // NEW FUNCTION
+  activePlan: string; // NEW STATE
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -33,6 +35,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
   loading: true,
+  switchPlan: () => {},
+  activePlan: 'basic',
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -40,6 +44,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activePlan, setActivePlan] = useState<string>('basic'); // Local state for testing
   const supabase = createClient();
   const router = useRouter();
 
@@ -73,6 +78,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(null);
         setUser(null);
         setProfile(null);
+        setActivePlan('basic');
         setLoading(false);
       } else if (session) {
         setSession(session);
@@ -94,6 +100,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) throw error;
       setProfile(data as Profile);
+      setActivePlan(data.plan_type || 'basic'); // Set active plan from DB on load
     } catch (error) {
       console.error('Error fetching profile:', error);
       setProfile(null);
@@ -102,8 +109,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Function to switch plan view locally (for testing)
+  const switchPlan = (plan: string) => {
+    setActivePlan(plan);
+    // Optionally update DB to make it permanent
+    if (profile?.id) {
+       supabase.from('profiles').update({ plan_type: plan }).eq('id', profile.id);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, switchPlan, activePlan }}>
       {children}
     </AuthContext.Provider>
   );

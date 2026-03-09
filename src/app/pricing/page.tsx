@@ -1,232 +1,170 @@
  'use client';
 
-import { useState } from 'react';
-import { Check, X, Zap, Star, ArrowRight, Users, BedDouble, ChefHat, FileText } from 'lucide-react';
+import { Check, X, Star, Zap, Crown, Building, ChefHat, UtensilsCrossed, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { PLANS } from '@/lib/plans';
 
 export default function PricingPage() {
 
-  // Define the keys allowed in our values object
-  type FeatureKey = 'pos' | 'users' | 'stock' | 'autoDeduct' | 'offline' | 'tables' | 'kds' | 'rooms' | 'payroll' | 'tax' | 'multiBranch';
-
-  // Feature definitions for comparison
-  const allFeatures: { name: string; key: FeatureKey }[] = [
-    { name: 'POS (Order Taking)', key: 'pos' },
-    { name: 'User Accounts', key: 'users' },
-    { name: 'Stock Management', key: 'stock' },
-    { name: 'Auto-Deduct Stock', key: 'autoDeduct' },
-    { name: 'Offline Mode', key: 'offline' },
-    { name: 'Table Management', key: 'tables' },
-    { name: 'Kitchen Display (KDS)', key: 'kds' },
-    { name: 'Hotel Rooms Module', key: 'rooms' },
-    { name: 'Payroll (PAYE/NSSF)', key: 'payroll' },
-    { name: 'Tax Reports (VAT)', key: 'tax' },
-    { name: 'Multi-Branch', key: 'multiBranch' },
-  ];
-
   const plans = [
-    // ==================================================
-    // BASIC PLAN: 3 Users, Stock, Offline. No Tables/KDS
-    // ==================================================
     {
       id: 'basic',
-      name: 'Basic',
-      price: '2,500',
-      description: 'Essential tools for small cafes.',
+      icon: UtensilsCrossed,
+      name: PLANS.basic.name,
+      price: PLANS.basic.price,
+      description: 'Perfect for small cafes and food joints starting their digital journey.',
       highlight: false,
-      values: {
-        pos: true, 
-        users: '3 Users',        // <--- YOU ASKED FOR 3 USERS
-        stock: true, 
-        autoDeduct: true, 
-        offline: true,
-        tables: false,           // <--- NO TABLES
-        kds: false,              // <--- NO KDS
-        rooms: false, 
-        payroll: false, 
-        tax: false, 
-        multiBranch: false,
-      },
+      features: [
+        { name: '3 User Accounts', enabled: true },
+        { name: 'Stock Management', enabled: true },
+        { name: 'Auto-Deduct Stock', enabled: true },
+        { name: 'Offline Mode', enabled: true },
+        { name: 'Table Management', enabled: false },
+        { name: 'Kitchen Display', enabled: false },
+      ],
     },
-    // ==================================================
-    // STANDARD PLAN: 5 Users, Stock, Offline, 5 Tables. No KDS
-    // ==================================================
     {
       id: 'standard',
-      name: 'Standard',
-      price: '5,500',
-      description: 'Waiter service & table management.',
+      icon: ChefHat,
+      name: PLANS.standard.name,
+      price: PLANS.standard.price,
+      description: 'Ideal for busy bars and medium-sized restaurants.',
       highlight: false,
-      values: {
-        pos: true, 
-        users: '5 Users',        // <--- YOU ASKED FOR 5 USERS
-        stock: true, 
-        autoDeduct: true, 
-        offline: true,
-        tables: '5 Tables',      // <--- YOU ASKED FOR 5 TABLES
-        kds: false,              // <--- NO KDS
-        rooms: false, 
-        payroll: false, 
-        tax: false, 
-        multiBranch: false,
-      },
+      features: [
+        { name: '5 User Accounts', enabled: true },
+        { name: '5 Tables Included', enabled: true },
+        { name: 'Stock & Offline Mode', enabled: true },
+        { name: 'Table Management', enabled: true },
+        { name: 'Kitchen Display', enabled: false },
+        { name: 'Rooms Module', enabled: false },
+      ],
     },
-    // ==================================================
-    // REGULAR PLAN: 10 Users, Stock, Offline, KDS. No Rooms
-    // ==================================================
     {
       id: 'regular',
-      name: 'Regular',
-      price: '9,500',
-      description: 'Kitchen operations streamlined.',
-      highlight: true,
-      values: {
-        pos: true, 
-        users: '10 Users',       // <--- YOU ASKED FOR 10 USERS
-        stock: true, 
-        autoDeduct: true, 
-        offline: true,
-        tables: 'Unlimited',
-        kds: true,               // <--- KDS INCLUDED
-        rooms: false,            // <--- NO ROOMS
-        payroll: false, 
-        tax: false, 
-        multiBranch: false,
-      },
+      icon: Zap,
+      name: PLANS.regular.name,
+      price: PLANS.regular.price,
+      description: 'Streamline your kitchen and scale operations.',
+      highlight: true, // MOST POPULAR
+      features: [
+        { name: '10 User Accounts', enabled: true },
+        { name: 'Unlimited Tables', enabled: true },
+        { name: 'Kitchen Display (KDS)', enabled: true },
+        { name: 'Full Stock Control', enabled: true },
+        { name: 'Rooms Module', enabled: false },
+        { name: 'Payroll & Tax', enabled: false },
+      ],
     },
-    // ==================================================
-    // PRO PLAN: All Features
-    // ==================================================
     {
       id: 'pro',
-      name: 'Pro',
-      price: 'Custom',
-      description: 'Full hotel & enterprise suite.',
+      icon: Building,
+      name: PLANS.pro.name,
+      price: PLANS.pro.price,
+      description: 'Complete solution for hotels and large chains.',
       highlight: false,
-      values: {
-        pos: true, 
-        users: 'Unlimited',
-        stock: true, 
-        autoDeduct: true, 
-        offline: true,
-        tables: 'Unlimited',
-        kds: true,
-        rooms: true,             // <--- ROOMS INCLUDED
-        payroll: true,           // <--- PAYROLL INCLUDED
-        tax: true,               // <--- TAX INCLUDED
-        multiBranch: true,
-      },
+      features: [
+        { name: 'Unlimited Users', enabled: true },
+        { name: 'Hotel Rooms Module', enabled: true },
+        { name: 'Payroll & Taxes', enabled: true },
+        { name: 'Multi-Branch Support', enabled: true },
+        { name: 'Priority Support', enabled: true },
+        { name: 'SLA Agreement', enabled: true },
+      ],
     },
   ];
 
-  const renderValue = (value: boolean | string) => {
-    if (value === true) return <Check className="text-green-400 mx-auto" size={18} />;
-    if (value === false) return <X className="text-gray-600 mx-auto" size={18} />;
-    return <span className="text-xs text-gray-300 font-medium block text-center">{value}</span>;
-  };
-
   return (
-    <div className="min-h-screen bg-gray-950 text-white py-16 px-4">
-      <div className="max-w-7xl mx-auto text-center mb-12">
-        <h1 className="text-4xl md:text-5xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-500">
-          Choose Your Plan
-        </h1>
-        <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-          Start small, scale infinitely. Upgrade or downgrade anytime.
-        </p>
+    <div className="min-h-screen bg-gray-950 text-white">
+      {/* HEADER */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-orange-900/20 to-gray-950 pointer-events-none" />
+        <div className="max-w-7xl mx-auto pt-20 pb-12 px-4 text-center relative z-10">
+          <span className="inline-block px-4 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full text-orange-400 text-sm font-semibold mb-6">
+            Simple, Transparent Pricing
+          </span>
+          <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight">
+            Scale Your Business
+          </h1>
+          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto">
+            Choose the perfect plan for your needs. No hidden fees.
+          </p>
+        </div>
       </div>
 
-      {/* Comparison Table View for Desktop */}
-      <div className="hidden lg:block overflow-x-auto pb-8">
-        <table className="w-full table-fixed border-collapse">
-          <thead>
-            <tr>
-              <th className="w-1/4 p-4 text-left bg-gray-900 rounded-tl-xl border-b border-gray-800">
-                <span className="text-lg font-bold text-gray-400">Features</span>
-              </th>
-              {plans.map((plan) => (
-                <th key={plan.id} className={`w-1/5 p-4 text-center border-b ${plan.highlight ? 'bg-gray-800 border-orange-500 border-t-2 border-l border-r' : 'bg-gray-900 border-gray-800'}`}>
-                  <h3 className="text-xl font-bold text-white">{plan.name}</h3>
-                  <p className="text-sm text-gray-400">{plan.description}</p>
-                  <div className="mt-2 mb-4">
-                    {plan.price === 'Custom' 
-                      ? <span className="text-2xl font-bold text-white">Custom</span>
-                      : <><span className="text-2xl font-bold text-white">KES {plan.price}</span><span className="text-gray-400 text-xs">/mo</span></>
-                    }
-                  </div>
-                  <Link 
-                    href={plan.id === 'pro' ? 'mailto:sales@stasha.co.ke' : '/login'}
-                    className={`inline-block px-6 py-2 rounded-lg font-bold text-sm ${
-                      plan.highlight ? 'bg-orange-500 text-black hover:bg-orange-600' : 'bg-gray-700 text-white hover:bg-gray-600'
-                    }`}
-                  >
-                    {plan.id === 'pro' ? 'Contact Sales' : 'Get Started'}
-                  </Link>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-gray-900">
-            {allFeatures.map((feature, idx) => (
-              <tr key={feature.key} className={`${idx === allFeatures.length - 1 ? 'border-b-0' : 'border-b border-gray-800'} hover:bg-gray-800/50`}>
-                <td className="p-4 text-sm text-gray-300 font-medium">{feature.name}</td>
-                {plans.map((plan) => (
-                  <td key={`${plan.id}-${feature.key}`} className="p-4">
-                    {renderValue(plan.values[feature.key])}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* CARDS GRID */}
+      <div className="max-w-7xl mx-auto px-4 pb-20 -mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {plans.map((plan) => (
+            <div
+              key={plan.id}
+              className={`relative rounded-2xl flex flex-col ${
+                plan.highlight 
+                  ? 'bg-gradient-to-b from-orange-500/10 to-gray-900 border-2 border-orange-500 shadow-2xl shadow-orange-500/10 scale-105 z-10' 
+                  : 'bg-gray-900 border border-gray-800'
+              }`}
+            >
+              {plan.highlight && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-orange-500 text-black text-xs font-bold rounded-full flex items-center gap-1 shadow-lg">
+                  <Star size={12} className="fill-current" /> MOST POPULAR
+                </div>
+              )}
 
-      {/* Card View for Mobile */}
-      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-        {plans.map((plan) => (
-          <div 
-            key={plan.id} 
-            className={`relative rounded-2xl p-[1px] ${plan.highlight ? 'border-2 border-orange-500 shadow-lg shadow-orange-500/20' : 'border border-gray-800'}`}
-          >
-            {plan.highlight && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-1 bg-orange-500 text-black text-xs font-bold rounded-full flex items-center gap-1">
-                <Star size={10} /> MOST POPULAR
-              </div>
-            )}
-            <div className="h-full bg-gray-900 rounded-2xl p-6 flex flex-col">
-              <h3 className="text-xl font-bold text-white">{plan.name}</h3>
-              <p className="text-gray-400 text-sm mt-1 mb-4">{plan.description}</p>
-              <div className="mb-6">
-                {plan.price === 'Custom' 
-                  ? <span className="text-3xl font-bold text-white">Custom</span>
-                  : <><span className="text-3xl font-bold text-white">KES {plan.price}</span><span className="text-gray-400">/mo</span></>
-                }
-              </div>
-              
-              <ul className="space-y-2 mb-6 flex-1">
-                {allFeatures.map((f) => (
-                  <li key={f.key} className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400">{f.name}</span>
-                    <span>{renderValue(plan.values[f.key])}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="p-6 flex-1 flex flex-col">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${plan.highlight ? 'bg-orange-500 text-black' : 'bg-gray-800 text-orange-400'}`}>
+                  <plan.icon size={24} />
+                </div>
 
-              <Link 
-                href={plan.id === 'pro' ? 'mailto:sales@stasha.co.ke' : '/login'}
-                className={`w-full py-2 rounded-lg font-bold text-center text-sm ${
-                  plan.highlight ? 'bg-orange-500 text-black hover:bg-orange-600' : 'bg-gray-700 text-white hover:bg-gray-600'
-                }`}
-              >
-                {plan.id === 'pro' ? 'Contact Sales' : 'Get Started'}
-              </Link>
+                <h3 className="text-xl font-bold mb-1">{plan.name}</h3>
+                <p className="text-gray-500 text-sm mb-6 min-h-[40px]">{plan.description}</p>
+
+                <div className="mb-6">
+                  {plan.price === 'Custom' ? (
+                    <span className="text-4xl font-extrabold">Custom</span>
+                  ) : (
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-extrabold">KES {plan.price}</span>
+                      <span className="text-gray-500">/mo</span>
+                    </div>
+                  )}
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {plan.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-center gap-2 text-sm">
+                      {feature.enabled ? (
+                        <Check size={16} className="text-green-400 flex-shrink-0" />
+                      ) : (
+                        <X size={16} className="text-gray-600 flex-shrink-0" />
+                      )}
+                      <span className={feature.enabled ? 'text-gray-300' : 'text-gray-600'}>{feature.name}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Link 
+                  href={plan.id === 'pro' ? 'mailto:sales@stasha.co.ke' : '/login'}
+                  className={`w-full py-3 rounded-lg font-bold text-center transition ${
+                    plan.highlight 
+                      ? 'bg-orange-500 text-black hover:bg-orange-600' 
+                      : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
+                  }`}
+                >
+                  {plan.id === 'pro' ? 'Contact Sales' : 'Get Started'}
+                </Link>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      <div className="mt-16 text-center text-gray-500 text-sm max-w-2xl mx-auto">
-        <p>All prices exclude VAT (16%). Plans auto-renew monthly. Cancel anytime.</p>
+      {/* FOOTER */}
+      <div className="border-t border-gray-800 py-12 text-center">
+        <p className="text-gray-500 text-sm mb-4">
+          All prices exclude VAT. Plans renew monthly. Cancel anytime.
+        </p>
+        <Link href="/admin" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition">
+           <ArrowLeft size={14} /> Return to Dashboard
+        </Link>
       </div>
     </div>
   );

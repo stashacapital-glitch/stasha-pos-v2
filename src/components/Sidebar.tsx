@@ -16,12 +16,13 @@ import {
   BookOpen,
   CreditCard,
   FileText,
-  Zap
+  Zap,
+  Crown
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
-import { hasFeature } from '@/lib/plans';
+import { hasFeature, PLANS } from '@/lib/plans';
 
 type Props = {
   isOpen: boolean;
@@ -29,24 +30,44 @@ type Props = {
 };
 
 export default function Sidebar({ isOpen, onClose }: Props) {
-  const { profile } = useAuth();
+  const { profile, activePlan, switchPlan } = useAuth();
   const router = useRouter();
   const supabase = createClient();
   
-  // Get current plan (fallback to basic if undefined)
-  const currentPlan = (profile?.plan_type || 'basic') as 'basic' | 'standard' | 'regular' | 'pro';
+  const currentPlan = (activePlan || 'basic') as 'basic' | 'standard' | 'regular' | 'pro';
+  const planName = PLANS[currentPlan]?.name || 'Basic';
+
+  // LOGIC: Check features for current plan
+  const isQuickSaleMode = hasFeature(currentPlan, 'quickSale');
 
   const navItems = [
     { name: 'Dashboard', href: '/admin', icon: Home, roles: null, feature: null },
-    { name: 'POS', href: '/admin/pos', icon: Utensils, roles: ['admin', 'manager', 'room_manager', 'waiter', 'bartender'], feature: 'pos' },
+    
+    // POS: Quick Sale for Basic, Full POS for others
+    { 
+      name: isQuickSaleMode ? 'Quick Sale' : 'POS', 
+      href: isQuickSaleMode ? '/admin/pos/quick' : '/admin/pos', 
+      icon: Utensils, 
+      roles: ['admin', 'manager', 'room_manager', 'waiter', 'bartender'], 
+      feature: 'pos' 
+    },
+    
+    // KITCHEN: Hidden for Basic & Standard. Visible for Regular & Pro.
     { name: 'Kitchen', href: '/admin/kds', icon: ChefHat, roles: null, feature: 'kds' },
+    
     { name: 'Reports', href: '/admin/reports', icon: TrendingUp, roles: ['admin', 'manager'], feature: 'pos' },
     { name: 'Expenses', href: '/admin/expenses', icon: DollarSign, roles: ['admin', 'manager'], feature: 'pos' },
     { name: 'Payroll', href: '/admin/payroll', icon: CreditCard, roles: ['admin', 'manager'], feature: 'payroll' },
     { name: 'Tax Reports', href: '/admin/reports/tax', icon: FileText, roles: ['admin', 'manager'], feature: 'tax' },
-    { name: 'Stock', href: '/admin/stock', icon: Package, roles: ['admin', 'manager', 'chef', 'bartender'], feature: 'stock' },
+    
+    // STOCK: Visible for Basic (Waiters need it)
+    { name: 'Stock', href: '/admin/stock', icon: Package, roles: ['admin', 'manager', 'chef', 'bartender', 'waiter'], feature: 'stock' },
     { name: 'Recipes', href: '/admin/settings/recipes', icon: BookOpen, roles: ['admin', 'manager', 'chef'], feature: 'stock' },
-    { name: 'Guests', href: '/admin/settings/guests', icon: Users, roles: ['admin', 'manager', 'room_manager'], feature: 'rooms' },
+    
+    // GUESTS: Hidden for Basic, Standard, Regular. Only Pro.
+    { name: 'Guests', href: '/admin/settings/guests', icon: Users, roles: ['admin', 'manager', 'room_manager'], feature: 'guests' },
+    
+    { name: 'Subscriptions', href: '/admin/settings/subscriptions', icon: Crown, roles: ['admin'], feature: null },
     { name: 'Billing', href: '/pricing', icon: Zap, roles: ['admin', 'manager'], feature: null },
     { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['admin', 'manager'], feature: null },
   ];
@@ -54,6 +75,7 @@ export default function Sidebar({ isOpen, onClose }: Props) {
   const filteredItems = navItems.filter(item => {
     if (item.roles && !profile?.role) return false;
     if (item.roles && !item.roles.includes(profile?.role || '')) return false;
+    // Strict Feature Gate
     if (item.feature && !hasFeature(currentPlan, item.feature as any)) return false;
     return true;
   });
@@ -80,11 +102,29 @@ export default function Sidebar({ isOpen, onClose }: Props) {
           ))}
         </nav>
         <div className="p-4 border-t border-gray-800">
+           
+           {/* PLAN SWITCHER (Testing Tool) */}
+           {profile?.role === 'admin' && (
+             <div className="mb-4">
+                <label className="text-[10px] uppercase text-gray-500 font-bold mb-1 block">Active Plan (Testing)</label>
+                <select 
+                    value={currentPlan} 
+                    onChange={(e) => switchPlan(e.target.value)}
+                    className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white text-xs font-bold"
+                >
+                    <option value="basic">Basic (Quick Sale)</option>
+                    <option value="standard">Standard</option>
+                    <option value="regular">Regular</option>
+                    <option value="pro">Pro</option>
+                </select>
+             </div>
+           )}
+
            <div className="flex items-center gap-2 mb-4">
              <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><Users size={14} className="text-gray-400"/></div>
              <div className="flex-1">
                 <p className="text-xs text-white font-medium truncate">{profile?.full_name}</p>
-                <p className="text-[10px] text-gray-500 uppercase">{profile?.role} • {currentPlan}</p>
+                <p className="text-[10px] text-gray-500 uppercase">{profile?.role} • {planName}</p>
              </div>
            </div>
            <button onClick={handleLogout} className="w-full py-2 bg-gray-700 hover:bg-red-900 text-gray-300 hover:text-white rounded text-xs font-bold flex items-center justify-center gap-2 transition">

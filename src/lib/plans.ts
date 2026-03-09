@@ -1,4 +1,4 @@
-// src/lib/plans.ts
+ // src/lib/plans.ts
 
 export type PlanType = 'basic' | 'standard' | 'regular' | 'pro';
 
@@ -6,9 +6,10 @@ export interface PlanFeatures {
   name: string;
   price: string;
   userLimit: number;
-  tableLimit: number | null; // null = unlimited
+  tableLimit: number | null;
   features: {
     pos: boolean;
+    quickSale: boolean; // NEW: Basic uses this
     stock: boolean;
     offline: boolean;
     tables: boolean;
@@ -25,9 +26,10 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
     name: 'Basic',
     price: '2,500',
     userLimit: 3,
-    tableLimit: 0, // 0 means disabled
+    tableLimit: 0,
     features: {
-      pos: true,
+      pos: true,      // Has POS access
+      quickSale: true, // Uses Quick Sale (No Menu/Tables)
       stock: true,
       offline: true,
       tables: false,
@@ -42,9 +44,10 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
     name: 'Standard',
     price: '5,500',
     userLimit: 5,
-    tableLimit: 5, // Max 5 tables
+    tableLimit: 5,
     features: {
       pos: true,
+      quickSale: false, // Uses Full POS
       stock: true,
       offline: true,
       tables: true,
@@ -59,9 +62,10 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
     name: 'Regular',
     price: '9,500',
     userLimit: 10,
-    tableLimit: null, // Unlimited
+    tableLimit: null,
     features: {
       pos: true,
+      quickSale: false,
       stock: true,
       offline: true,
       tables: true,
@@ -79,6 +83,7 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
     tableLimit: null,
     features: {
       pos: true,
+      quickSale: false,
       stock: true,
       offline: true,
       tables: true,
@@ -91,23 +96,7 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
   },
 };
 
-// Helper to check if a feature is allowed
 export function hasFeature(plan: PlanType | undefined, feature: keyof PlanFeatures['features']): boolean {
   if (!plan) return false;
   return PLANS[plan]?.features[feature] ?? false;
-}
-
-// Helper to check user limit
-export function canAddUser(plan: PlanType | undefined, currentCount: number): boolean {
-  if (!plan) return false;
-  const limit = PLANS[plan].userLimit;
-  return currentCount < limit;
-}
-
-// Helper to check table limit
-export function canAddTable(plan: PlanType | undefined, currentCount: number): boolean {
-  if (!plan) return false;
-  const limit = PLANS[plan].tableLimit;
-  if (limit === null) return true; // Unlimited
-  return currentCount < limit;
 }

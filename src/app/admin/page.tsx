@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/utils/supabase';
-import { Loader2, DollarSign, BedDouble, CookingPot, Users, Utensils, TrendingUp, TrendingDown, CalendarDays, Infinity, Play, Square } from 'lucide-react';
+import { Loader2, DollarSign, BedDouble, CookingPot, Users, Utensils, TrendingUp, TrendingDown, CalendarDays, Infinity, Play, Square, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
+import { hasFeature } from '@/lib/plans';
 
 export default function AdminDashboard() {
-  const { profile } = useAuth();
+  const { profile, activePlan } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -22,15 +23,19 @@ export default function AdminDashboard() {
   const [occupancy, setOccupancy] = useState({ occupied: 0, total: 0 });
   const [activeOrders, setActiveOrders] = useState(0);
   const [guestsCount, setGuestsCount] = useState(0);
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [salesHistory, setSalesHistory] = useState<any[]>([]);
 
   const [isOnShift, setIsOnShift] = useState(false);
   const [shiftLoading, setShiftLoading] = useState(false);
 
-  // FIX: Added fallback empty string to role checks
+  const currentPlan = (activePlan || 'basic') as 'basic' | 'standard' | 'regular' | 'pro';
+  
+  // Feature Checks
   const canSeeMoney = ['admin', 'manager'].includes(profile?.role || '');
-  const canSeeRooms = ['admin', 'manager', 'room_manager'].includes(profile?.role || '');
+  const canSeeRooms = hasFeature(currentPlan, 'rooms');
+  const canSeeKDS = hasFeature(currentPlan, 'kds');
+  const isQuickSaleMode = hasFeature(currentPlan, 'quickSale');
   const isStaffRole = ['waiter', 'bartender', 'chef'].includes(profile?.role || '');
 
   useEffect(() => {
@@ -104,7 +109,7 @@ export default function AdminDashboard() {
     }
 
     const { data: recent } = await supabase.from('orders').select('id, created_at, total_price, status, guests(full_name), rooms(room_number)').eq('org_id', profile.org_id).order('created_at', { ascending: false }).limit(5);
-    setRecentOrders(recent || []);
+    setRecentTransactions(recent || []);
 
     setLoading(false);
   };
@@ -123,8 +128,13 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- REALTIME FUNCTION (Added Back) ---
   const setupRealtime = () => {
-    const channel = supabase.channel('dashboard-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchStats()).on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => fetchStats()).subscribe();
+    const channel = supabase.channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => fetchStats())
+      .subscribe();
+    
     return () => { supabase.removeChannel(channel); };
   };
 
@@ -162,7 +172,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* FINANCIALS ROW (Admin/Manager Only) */}
+      {/* FINANCIALS ROW */}
       {canSeeMoney && (
         <>
           <div className="mb-6">
@@ -213,9 +223,11 @@ export default function AdminDashboard() {
             <BedDouble className="text-purple-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Rooms</p><p className="text-xl font-bold text-white mt-1">{occupancy.occupied} / {occupancy.total}</p>
           </div>
         )}
-        <Link href="/admin/kds" className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center hover:border-orange-500 cursor-pointer">
-          <CookingPot className="text-orange-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Kitchen</p><p className="text-xl font-bold text-white mt-1">{activeOrders}</p>
-        </Link>
+        {canSeeKDS && (
+          <Link href="/admin/kds" className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center hover:border-orange-500 cursor-pointer">
+            <CookingPot className="text-orange-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Kitchen</p><p className="text-xl font-bold text-white mt-1">{activeOrders}</p>
+          </Link>
+        )}
         {canSeeRooms && (
           <Link href="/admin/settings/guests" className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center justify-center text-center hover:border-blue-500 cursor-pointer col-span-2 lg:col-span-2">
             <Users className="text-blue-400 mb-1" size={20} /><p className="text-gray-500 text-xs">Total Guests</p><p className="text-xl font-bold text-white mt-1">{guestsCount}</p>
@@ -229,10 +241,26 @@ export default function AdminDashboard() {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
             <div className="grid grid-cols-3 gap-4">
-              <Link href="/admin/pos" className="bg-orange-500 hover:bg-orange-600 text-black font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><Utensils size={20} /> POS</Link>
-              <Link href="/admin/kds" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><CookingPot size={20} /> Kitchen</Link>
+              {/* DYNAMIC POS LINK */}
+              <Link 
+                href={isQuickSaleMode ? '/admin/pos/quick' : '/admin/pos'} 
+                className="bg-orange-500 hover:bg-orange-600 text-black font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"
+              >
+                 {isQuickSaleMode ? <ShoppingCart size={20} /> : <Utensils size={20} />}
+                 {isQuickSaleMode ? 'Quick Sale' : 'POS'}
+              </Link>
+              
+              {/* KITCHEN - Hidden for Basic */}
+              {canSeeKDS && (
+                <Link href="/admin/kds" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition">
+                   <CookingPot size={20} /> Kitchen
+                </Link>
+              )}
+              
               {canSeeMoney && (
-                <Link href="/admin/reports" className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition"><TrendingUp size={20} /> Reports</Link>
+                <Link href="/admin/reports" className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-lg flex flex-col items-center justify-center gap-2 transition">
+                   <TrendingUp size={20} /> Reports
+                </Link>
               )}
             </div>
           </div>
@@ -255,10 +283,10 @@ export default function AdminDashboard() {
         </div>
 
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 h-fit">
-          <h3 className="text-lg font-bold text-white mb-4">Recent Orders</h3>
+          <h3 className="text-lg font-bold text-white mb-4">Recent Transactions</h3>
           <div className="space-y-3">
-            {recentOrders.length === 0 ? ( <p className="text-gray-500 text-sm text-center py-4">No recent orders</p> ) : (
-              recentOrders.map((o: any) => (
+            {recentTransactions.length === 0 ? ( <p className="text-gray-500 text-sm text-center py-4">No recent orders</p> ) : (
+              recentTransactions.map((o: any) => (
                 <div key={o.id} className="border-b border-gray-700 pb-2 last:border-0">
                   <div className="flex justify-between items-center">
                     <div>
