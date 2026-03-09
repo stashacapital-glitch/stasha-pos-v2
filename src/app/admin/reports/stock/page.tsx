@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/utils/supabase';
-import { Loader2, FileSpreadsheet, PlusCircle, ArrowLeft } from 'lucide-react';
+import { Loader2, PlusCircle, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PermissionGate from '@/components/PermissionGate';
 import Link from 'next/link';
@@ -43,7 +43,8 @@ export default function StockVariancePage() {
     setItems(menuItems || []);
 
     // 2. Calculate for each item
-    const reportData = await Promise.all((menuItems || []).map(async (item) => {
+    // FIX: Explicitly type 'item' as any
+    const reportData = await Promise.all((menuItems || []).map(async (item: any) => {
         // Get Opening Stock
         const { data: openings } = await supabase
             .from('stock_entries')
@@ -60,6 +61,8 @@ export default function StockVariancePage() {
             .select('quantity')
             .eq('menu_item_id', item.id)
             .eq('type', 'purchase');
+        
+        // FIX: Explicitly type parameters
         const totalPurchases = purchases?.reduce((sum: number, p: any) => sum + p.quantity, 0) || 0;
 
         return {
@@ -117,7 +120,6 @@ export default function StockVariancePage() {
             <table className="w-full text-left text-sm">
                 <thead className="bg-gray-900 border-b border-gray-700">
                     <tr>
-                        {/* FIXED: Added text-gray-300 for visibility */}
                         <th className="p-4 text-gray-300 font-bold">Item</th>
                         <th className="p-4 text-right text-gray-300 font-bold">Opening</th>
                         <th className="p-4 text-right text-gray-300 font-bold">Purchases</th>
@@ -127,7 +129,7 @@ export default function StockVariancePage() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
-                    {report.map((row) => (
+                    {report.map((row: any) => (
                         <tr key={row.id} className="hover:bg-gray-700/30">
                             <td className="p-4 font-medium text-white">{row.name}</td>
                             <td className="p-4 text-right text-gray-300">{row.opening}</td>
@@ -156,7 +158,8 @@ export default function StockVariancePage() {
                             className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                         >
                             <option value="">Select...</option>
-                            {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                            {/* FIX: Explicitly type 'i' as any */}
+                            {items.map((i: any) => <option key={i.id} value={i.id}>{i.name}</option>)}
                         </select>
                     </div>
                     <div>
