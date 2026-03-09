@@ -68,7 +68,7 @@ export default function QuickSalePage() {
       }
       return [...prev, { ...item, quantity: 1 }];
     });
-    setSearch(''); // Clear search to hide results and show bill
+    setSearch('');
   };
 
   const updateQty = (id: string, delta: number) => {
@@ -117,17 +117,25 @@ export default function QuickSalePage() {
 
       const itemIds = cart.map(i => i.id);
       const { data: allRecipes } = await supabase.from('recipes').select('menu_item_id, ingredient_id, quantity').in('menu_item_id', itemIds);
-      const deductionOperations = [];
+      
+      // FIX: Explicitly type the array as Promise<any>[]
+      const deductionOperations: Promise<any>[] = [];
+      
       cart.forEach(item => {
         const relatedRecipes = allRecipes?.filter(r => r.menu_item_id === item.id);
         if (relatedRecipes && relatedRecipes.length > 0) {
           relatedRecipes.forEach(ing => {
-            deductionOperations.push(supabase.rpc('deduct_stock', { item_id: ing.ingredient_id, qty: ing.quantity * item.quantity }));
+            deductionOperations.push(
+              supabase.rpc('deduct_stock', { item_id: ing.ingredient_id, qty: ing.quantity * item.quantity })
+            );
           });
         } else {
-          deductionOperations.push(supabase.rpc('deduct_stock', { item_id: item.id, qty: item.quantity }));
+          deductionOperations.push(
+            supabase.rpc('deduct_stock', { item_id: item.id, qty: item.quantity })
+          );
         }
       });
+
       await Promise.all(deductionOperations);
 
       setLastOrder({ ...order, items: cart, total: total, method: method, cashier: profile?.full_name || 'Admin' });
@@ -182,7 +190,7 @@ export default function QuickSalePage() {
         {/* SCROLLABLE CONTENT AREA */}
         <div className="flex-1 overflow-y-auto">
           
-          {/* 1. SEARCH SECTION (TOP) */}
+          {/* 1. SEARCH SECTION */}
           <div className="p-4 bg-gray-900 sticky top-0 z-10 border-b border-gray-800">
             <div className="flex items-center gap-2 bg-gray-800 p-3 rounded-lg border border-gray-700">
               <Search className="text-gray-500" size={20} />
@@ -201,7 +209,7 @@ export default function QuickSalePage() {
             </div>
           </div>
 
-          {/* 2. SEARCH RESULTS (DISPLAY AT TOP) */}
+          {/* 2. SEARCH RESULTS */}
           {search.length > 0 && (
             <div className="p-4 space-y-2 bg-gray-950">
               {results.length === 0 ? (
@@ -232,7 +240,7 @@ export default function QuickSalePage() {
             </div>
           )}
 
-          {/* 3. CURRENT BILL (DISPLAY BELOW) */}
+          {/* 3. CURRENT BILL */}
           {search.length === 0 && (
             <div className="p-4">
               <div className="flex justify-between items-center mb-3">
@@ -267,9 +275,8 @@ export default function QuickSalePage() {
           )}
         </div>
 
-        {/* FOOTER (PAYMENT AREA) */}
+        {/* FOOTER */}
         <div className="flex-shrink-0 bg-gray-900 border-t border-gray-800 p-4">
-           {/* Action Buttons */}
            <div className="grid grid-cols-2 gap-2 mb-2">
               <button onClick={openViewModal} disabled={cart.length === 0} className="py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-1"><Eye size={12}/> View Bill</button>
               <button onClick={handlePrint} disabled={cart.length === 0} className="py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-1"><Printer size={12}/> Print</button>
