@@ -9,12 +9,13 @@ export interface PlanFeatures {
   tableLimit: number | null;
   features: {
     pos: boolean;
-    quickSale: boolean; // NEW: Basic uses this
+    quickSale: boolean;
     stock: boolean;
     offline: boolean;
     tables: boolean;
     kds: boolean;
     rooms: boolean;
+    guests: boolean;
     payroll: boolean;
     tax: boolean;
     multiBranch: boolean;
@@ -22,63 +23,73 @@ export interface PlanFeatures {
 }
 
 export const PLANS: Record<PlanType, PlanFeatures> = {
+  // 1. BASIC PLAN
   basic: {
     name: 'Basic',
-    price: '2,500',
+    price: '2,200',
     userLimit: 3,
     tableLimit: 0,
     features: {
-      pos: true,      // Has POS access
-      quickSale: true, // Uses Quick Sale (No Menu/Tables)
+      pos: true,
+      quickSale: true, 
       stock: true,
       offline: true,
-      tables: false,
+      tables: false,   
       kds: false,
       rooms: false,
+      guests: false,
       payroll: false,
       tax: false,
       multiBranch: false,
     },
   },
+
+  // 2. STANDARD PLAN
   standard: {
     name: 'Standard',
-    price: '5,500',
+    price: '4,500',
     userLimit: 5,
-    tableLimit: 5,
+    tableLimit: 5,       
     features: {
       pos: true,
-      quickSale: false, // Uses Full POS
+      quickSale: false, 
       stock: true,
       offline: true,
-      tables: true,
-      kds: false,
-      rooms: false,
+      tables: true,     // Table Management Included
+      kds: false,       // Add-on
+      rooms: false,     // Add-on
+      guests: false,
       payroll: false,
       tax: false,
       multiBranch: false,
     },
   },
+
+  // 3. REGULAR PLAN (Includes KDS now)
   regular: {
     name: 'Regular',
-    price: '9,500',
+    price: '8,000',
     userLimit: 10,
-    tableLimit: null,
+    tableLimit: null, // Unlimited
     features: {
       pos: true,
       quickSale: false,
       stock: true,
       offline: true,
       tables: true,
-      kds: true,
-      rooms: false,
-      payroll: false,
-      tax: false,
+      kds: true,       // Included per strategy
+      rooms: true,
+      guests: true,
+      payroll: true,
+      tax: true,
       multiBranch: false,
     },
   },
+
+  // 4. PRO PLAN (Anchor Price)
   pro: {
     name: 'Pro',
-    price: 'Custom',
+    price: '15,000+', // Anchor Price
     userLimit: Infinity,
     tableLimit: null,
     features: {
@@ -89,6 +100,7 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
       tables: true,
       kds: true,
       rooms: true,
+      guests: true,
       payroll: true,
       tax: true,
       multiBranch: true,

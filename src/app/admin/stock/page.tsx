@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/utils/supabase';
-import { Loader2, Plus, Pencil, Trash2, Package, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Save, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PermissionGate from '@/components/PermissionGate';
 import Link from 'next/link';
@@ -14,14 +14,11 @@ export default function StockPage() {
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
-  const [showModal, setShowModal] = useState(false);
   
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [category, setCategory] = useState('food');
-  const [stock, setStock] = useState('');
-  const [minStock, setMinStock] = useState('10');
+  // Inputs
+  const [purchases, setPurchases] = useState<Record<string, string>>({});
+  const [counts, setCounts] = useState<Record<string, string>>({});
+  
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -30,179 +27,227 @@ export default function StockPage() {
 
   const fetchItems = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('org_id', profile?.org_id)
-      .order('created_at', { ascending: false });
     
-    setItems(data || []);
+    const { data: menuItems, error } = await supabase
+      .from('menu_items')
+      .select('id, name, category, current_stock, min_stock')
+      .eq('org_id', profile?.org_id)
+      .order('name', { ascending: true });
+
+    if (error) { toast.error("Failed to load items"); setLoading(false); return; }
+
+    const { data: entries } = await supabase
+        .from('stock_entries')
+        .select('menu_item_id, type, quantity')
+        .eq('org_id', profile?.org_id);
+
+    const { data: orders } = await supabase
+        .from('orders')
+        .select('items')
+        .eq('org_id', profile?.org_id)
+        .eq('status', 'paid');
+
+    const salesMap: Record<string, number> = {};
+    (orders || []).forEach((order: any) => {
+        (order.items || []).forEach((item: any) => {
+            if (!salesMap[item.id]) salesMap[item.id] = 0;
+            salesMap[item.id] += item.quantity || 0;
+        });
+    });
+
+    const detailedItems = (menuItems || []).map((item: any) => {
+        const itemEntries = entries?.filter((e: any) => e.menu_item_id === item.id) || [];
+        const opening = itemEntries.filter((e: any) => e.type === 'opening').reduce((sum: number, e: any) => sum + e.quantity, 0) || 0;
+        const dbPurchases = itemEntries.filter((e: any) => e.type === 'purchase').reduce((sum: number, e: any) => sum + e.quantity, 0) || 0;
+        const sales = salesMap[item.id] || 0;
+        return { ...item, opening_stock: opening, db_purchases: dbPurchases, total_sales: sales };
+    });
+
+    setItems(detailedItems);
     setLoading(false);
   };
 
-  const openModal = (item?: any) => {
-    if (item) {
-      setEditingId(item.id);
-      setName(item.name);
-      setPrice(item.price.toString());
-      setCategory(item.category || 'food');
-      setStock(item.current_stock?.toString() || '0');
-      setMinStock(item.min_stock?.toString() || '10');
-    } else {
-      setEditingId(null);
-      setName('');
-      setPrice('');
-      setCategory('food');
-      setStock('');
-      setMinStock('10');
-    }
-    setShowModal(true);
+  const handlePurchaseChange = (itemId: string, value: string) => {
+    setPurchases(prev => ({ ...prev, [itemId]: value }));
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !price) { toast.error("Name and Price required"); return; }
+  const handleCountChange = (itemId: string, value: string) => {
+    setCounts(prev => ({ ...prev, [itemId]: value }));
+  };
+
+  const getExpectedStock = (item: any) => {
+    const inputPurchase = parseFloat(purchases[item.id] || '0');
+    return item.opening_stock + item.db_purchases + inputPurchase - item.total_sales;
+  };
+
+  const getVariance = (item: any) => {
+    const countStr = counts[item.id];
+    if (countStr === '' || countStr === undefined) return null;
+    const actual = parseFloat(countStr);
+    const expected = getExpectedStock(item);
+    return actual - expected;
+  };
+
+  const handleSaveAll = async () => {
+    if (!profile?.org_id) {
+        toast.error("Session invalid. Please log in again.");
+        return;
+    }
+
     setSubmitting(true);
-
+    
     try {
-      const payload = {
-        name,
-        price: parseFloat(price),
-        category,
-        current_stock: parseFloat(stock || '0'),
-        min_stock: parseInt(minStock || '10'),
-        is_ingredient: true 
-      };
+        const promises = [];
 
-      if (editingId) {
-        const { error } = await supabase.from('menu_items').update(payload).eq('id', editingId);
-        if (error) throw error;
-        toast.success('Item updated');
-      } else {
-        const { error } = await supabase.from('menu_items').insert({ ...payload, org_id: profile?.org_id, is_available: true });
-        if (error) throw error;
-        toast.success('Item added');
-      }
-      setShowModal(false);
-      fetchItems();
+        for (const [itemId, qtyStr] of Object.entries(purchases)) {
+            const qty = parseFloat(qtyStr);
+            if (isNaN(qty) || qty <= 0) continue;
+            promises.push(supabase.from('stock_entries').insert({ org_id: profile.org_id, menu_item_id: itemId, type: 'purchase', quantity: qty }));
+            promises.push(supabase.rpc('add_stock', { item_id: itemId, qty: qty }));
+        }
+
+        for (const [itemId, qtyStr] of Object.entries(counts)) {
+            const qty = parseFloat(qtyStr);
+            if (isNaN(qty)) continue;
+            const item = items.find(i => i.id === itemId);
+            const diff = qty - (item?.current_stock || 0);
+            promises.push(supabase.from('stock_entries').insert({ org_id: profile.org_id, menu_item_id: itemId, type: 'adjustment', quantity: diff, notes: 'Stock Count' }));
+            promises.push(supabase.from('menu_items').update({ current_stock: qty }).eq('id', itemId));
+        }
+
+        const results = await Promise.all(promises);
+        const errors = results.filter((r: any) => r.error);
+        if (errors.length > 0) throw new Error(errors[0].error.message);
+
+        toast.success("Saved Successfully!");
+        setPurchases({});
+        setCounts({});
+        await fetchItems(); 
+
     } catch (err: any) {
-      toast.error(err.message);
+        toast.error(err.message);
     } finally {
-      setSubmitting(false);
+        setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this item?")) return;
-    await supabase.from('menu_items').delete().eq('id', id);
-    fetchItems();
-    toast.success("Deleted");
+  const handlePrint = () => {
+    window.print();
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
   return (
-    <PermissionGate allowedRoles={['admin', 'manager', 'chef', 'bartender']} fallback={<div className="p-8 text-red-400 text-center">Access Denied</div>}>
-      <div className="p-8">
-        <div className="flex justify-between items-center mb-6">
+    <PermissionGate allowedRoles={['admin', 'manager']} fallback={<div className="p-8 text-red-400 text-center">Access Denied</div>}>
+      <div className="p-4 md:p-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="flex items-center gap-4">
-            <Link href="/admin" className="p-2 bg-gray-800 rounded-lg border border-gray-700 hover:bg-gray-700 transition">
-               <ArrowLeft size={20} className="text-gray-400" />
+            {/* UPDATED: Clear Back Button */}
+            <Link 
+                href="/admin" 
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-300 text-sm font-medium transition print:hidden"
+            >
+               <ArrowLeft size={18} /> Back
             </Link>
-            <h1 className="text-3xl font-bold text-orange-400">Stock Management</h1>
+            <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-orange-400">Daily Stock Sheet</h1>
+                <p className="text-xs text-gray-500">Formula: Op + Purch - Sales = Expected | Actual - Expected = Variance</p>
+            </div>
           </div>
-          <button onClick={() => openModal()} className="bg-orange-500 text-black px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-orange-400">
-            <Plus size={18} /> Add Item
-          </button>
+          
+          {/* UPDATED: Clear Button Styles */}
+          <div className="flex gap-2 print:hidden">
+            <button 
+                onClick={handleSaveAll} 
+                disabled={submitting} 
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold text-sm disabled:opacity-50 transition cursor-pointer"
+            >
+                {submitting ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} 
+                {submitting ? 'Saving...' : 'Save Sheet'}
+            </button>
+            <button 
+                onClick={handlePrint} 
+                className="flex items-center gap-2 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-bold text-sm transition cursor-pointer"
+            >
+                <Printer size={16}/> Print
+            </button>
+          </div>
         </div>
 
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-          <table className="w-full">
+        <div id="printableArea" className="bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
+          <table className="w-full min-w-[1100px]">
             <thead className="bg-gray-900">
-              <tr className="text-left text-gray-400 border-b border-gray-700">
-                <th className="p-4">Item Name</th>
-                <th className="p-4">Category</th>
-                <th className="p-4 text-right">Price</th>
-                <th className="p-4 text-right">Stock</th>
-                <th className="p-4 text-right">Min Stock</th>
-                <th className="p-4 text-right">Status</th>
-                <th className="p-4 text-right">Actions</th>
+              <tr className="text-left text-gray-400 border-b border-gray-700 text-xs uppercase">
+                <th className="p-4 w-1/5">Item Name</th>
+                <th className="p-4 text-right">(1) Opening</th>
+                <th className="p-4 text-center">(2) + Purchases</th>
+                <th className="p-4 text-right">(3) - Sales</th>
+                <th className="p-4 text-right font-bold text-blue-300 border-l border-gray-700">(4) = Expected</th>
+                <th className="p-4 text-center font-bold text-white">(5) - Actual Counted</th>
+                <th className="p-4 text-right font-bold text-orange-300">(6) Variance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-700/50">
-                  <td className="p-4 text-white font-medium">{item.name}</td>
-                  <td className="p-4 text-gray-300 text-sm">{item.category}</td>
-                  <td className="p-4 text-right text-green-400 font-mono">KES {item.price}</td>
-                  <td className="p-4 text-right text-white font-bold">{item.current_stock}</td>
-                  <td className="p-4 text-right text-gray-400">{item.min_stock}</td>
-                  <td className="p-4 text-right">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        item.current_stock <= 0 ? 'bg-red-900 text-red-200' : 
-                        item.current_stock <= item.min_stock ? 'bg-yellow-900 text-yellow-200' : 
-                        'bg-green-900 text-green-200'
-                    }`}>
-                        {item.current_stock <= 0 ? 'Out' : item.current_stock <= item.min_stock ? 'Low' : 'OK'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right flex gap-3 justify-end">
-                    <button onClick={() => openModal(item)} className="text-blue-400 hover:text-blue-300"><Pencil size={16} /></button>
-                    <button onClick={() => handleDelete(item.id)} className="text-red-400 hover:text-red-300"><Trash2 size={16} /></button>
-                  </td>
-                </tr>
-              ))}
+              {items.length === 0 ? (
+                 <tr><td colSpan={7} className="p-8 text-center text-gray-500">No items found.</td></tr>
+              ) : (
+                items.map((item) => {
+                   const expected = getExpectedStock(item);
+                   const variance = getVariance(item);
+                   const varianceClass = variance === null ? 'text-gray-600' : variance < 0 ? 'text-red-400' : variance > 0 ? 'text-green-400' : 'text-gray-400';
+
+                   return (
+                    <tr key={item.id} className="hover:bg-gray-700/30">
+                      <td className="p-4 text-white font-medium">{item.name}</td>
+                      <td className="p-4 text-right text-gray-300">{item.opening_stock}</td>
+                      <td className="p-4 text-center bg-green-900/10">
+                        <div className="flex flex-col items-center gap-1">
+                           <span className="text-green-300 text-xs font-bold">({item.db_purchases} rec'd)</span>
+                           <input 
+                              type="number" 
+                              placeholder="+ Add"
+                              value={purchases[item.id] || ''}
+                              onChange={(e) => handlePurchaseChange(item.id, e.target.value)}
+                              className="w-20 p-2 bg-gray-700 rounded border border-gray-600 text-green-400 text-center font-bold focus:ring-1 focus:ring-green-500"
+                            />
+                        </div>
+                      </td>
+                      <td className="p-4 text-right text-red-400">{item.total_sales}</td>
+                      <td className="p-4 text-right text-blue-300 font-bold border-l border-gray-700 pl-4">{expected}</td>
+                      <td className="p-4 text-center bg-gray-900/50">
+                        <input 
+                          type="number" 
+                          placeholder="0"
+                          value={counts[item.id] || ''}
+                          onChange={(e) => handleCountChange(item.id, e.target.value)}
+                          className="w-20 p-2 bg-gray-700 rounded border border-gray-600 text-white text-center font-bold focus:ring-1 focus:ring-orange-500"
+                        />
+                      </td>
+                      <td className={`p-4 text-right font-bold ${varianceClass}`}>
+                          {variance !== null ? (variance > 0 ? '+' : '') + variance : '-'}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-sm border border-gray-700">
-            <h2 className="text-xl font-bold mb-4 text-white">{editingId ? 'Edit' : 'Add'} Item</h2>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Name</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Price</label>
-                  <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
-                  <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white">
-                    <option value="ingredient">Ingredient</option>
-                    <option value="food">Food</option>
-                    <option value="beer">Beer</option>
-                    <option value="soft_drink">Soft Drink</option>
-                    <option value="spirit">Spirit</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Current Stock</label>
-                  <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Min Stock Alert</label>
-                  <input type="number" value={minStock} onChange={(e) => setMinStock(e.target.value)} className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white" />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2 bg-gray-600 rounded hover:bg-gray-500 text-white">Cancel</button>
-                <button type="submit" disabled={submitting} className="flex-1 py-2 bg-orange-500 text-black font-bold rounded disabled:opacity-50">
-                  {submitting ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <style jsx global>{`
+        @media print {
+          body * { visibility: hidden; }
+          #printableArea, #printableArea * { visibility: visible; }
+          #printableArea {
+            position: absolute; left: 0; top: 0; width: 100%;
+            background-color: white !important; color: black !important;
+          }
+          #printableArea th, #printableArea td { border: 1px solid #000 !important; color: black !important; }
+          .print\\:hidden { display: none !important; }
+          input { border: none !important; background: transparent !important; text-align: center; }
+        }
+      `}</style>
     </PermissionGate>
   );
 }
