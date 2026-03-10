@@ -22,9 +22,11 @@ export default function TablesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Check if user has permission for tables
     if (profile?.org_id) {
-      const canView = hasFeature(profile.plan_type, 'tables');
+      // FIX: Cast string to PlanType
+      const userPlan = (profile.plan_type || 'basic') as 'basic' | 'standard' | 'regular' | 'pro';
+      const canView = hasFeature(userPlan, 'tables');
+      
       if (!canView) {
         setLoading(false);
         return;
@@ -84,8 +86,8 @@ export default function TablesPage() {
     else { toast.success("Deleted"); fetchTables(); }
   };
 
-  // Check feature access
-  const hasAccess = hasFeature(profile?.plan_type, 'tables');
+  const userPlan = (profile?.plan_type || 'basic') as 'basic' | 'standard' | 'regular' | 'pro';
+  const hasAccess = hasFeature(userPlan, 'tables');
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-orange-400" /></div>;
 
