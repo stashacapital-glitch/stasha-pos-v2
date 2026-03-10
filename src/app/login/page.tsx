@@ -1,137 +1,130 @@
  'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { createClient } from '@/utils/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Loader2, LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function LoginPage() {
+// 1. Extract the component that uses useSearchParams
+function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const supabase = createClient();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const selectedPlan = searchParams.get('plan') || 'basic'; // Get plan from URL
+  
+  // Get plan from URL (default to basic)
+  const selectedPlan = searchParams.get('plan') || 'basic';
 
-  const supabase = createClient();
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isRegister) {
-        // SIGN UP FLOW
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: {
-              plan_type: selectedPlan, // Pass plan in metadata
-            },
-          },
+            data: { plan_type: selectedPlan } // Save selected plan
+          }
         });
-
         if (error) throw error;
-        
-        // Immediately try to create profile if it doesn't exist
-        if (data.user) {
-             await createOrUpdateProfile(data.user.id, email, selectedPlan);
-        }
-
-        toast.success('Account created! Please check email to verify.');
+        toast.success('Account created! Please check your email to verify.');
       } else {
-        // LOGIN FLOW
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-
-        if (data.user) {
-          // Update plan on login (for testing/demo purposes)
-          await createOrUpdateProfile(data.user.id, email, selectedPlan);
-          router.push('/admin');
-        }
+        router.push('/admin');
+        router.refresh();
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (err: any) {
+      toast.error(err.error_description || err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const createOrUpdateProfile = async (userId: string, email: string, plan: string) => {
-    // This client-side upsert helps fix missing profiles immediately
-    const { error } = await supabase.from('profiles').upsert({
-      id: userId,
-      email: email,
-      plan_type: plan,
-      role: 'admin',
-      full_name: email.split('@')[0]
-    }, { onConflict: 'id' });
-
-    if (error) console.error("Profile upsert error", error);
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-orange-400">StashaPOS</h1>
-          <p className="text-gray-400 mt-2 text-sm">
-            {isRegister ? `Create your ${selectedPlan.toUpperCase()} account` : `Login to continue`}
-          </p>
-        </div>
-
-        <form onSubmit={handleLogin} className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 text-white placeholder-gray-400 focus:ring-1 focus:ring-orange-500"
-              placeholder="you@example.com"
-              required
-            />
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-extrabold text-white mb-2">SmartServe POS</h1>
+            <p className="text-gray-400 text-sm">
+              {isRegister ? 'Create your account' : 'Sign in to your dashboard'}
+            </p>
+            {selectedPlan && isRegister && (
+               <span className="inline-block mt-2 px-2 py-1 bg-orange-900/30 text-orange-300 text-xs rounded-full border border-orange-700">
+                 Selected Plan: {selectedPlan.toUpperCase()}
+               </span>
+            )}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 text-white placeholder-gray-400 focus:ring-1 focus:ring-orange-500"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+          <form onSubmit={handleAuth} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Email Address</label>
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-1 focus:ring-orange-500 focus:outline-none"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Password</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-1 focus:ring-orange-500 focus:outline-none"
+                placeholder="••••••••"
+                required
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-black font-bold rounded transition disabled:opacity-50"
-          >
-            {loading ? 'Processing...' : isRegister ? 'Create Account' : 'Login'}
-          </button>
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-black font-bold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="animate-spin" size={20} /> : <><LogIn size={20} /> {isRegister ? 'Create Account' : 'Sign In'}</>}
+            </button>
+          </form>
 
-          <div className="text-center text-sm text-gray-500 pt-2">
-            {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button type="button" onClick={() => setIsRegister(!isRegister)} className="text-orange-400 hover:underline">
-              {isRegister ? 'Login' : 'Register'}
+          <div className="mt-6 text-center">
+            <button 
+              onClick={() => setIsRegister(!isRegister)}
+              className="text-sm text-gray-400 hover:text-orange-400 transition"
+            >
+              {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Register"}
             </button>
           </div>
-        </form>
-
-        <p className="text-xs text-center text-gray-600">
-          By continuing, you agree to our Terms of Service.
+        </div>
+        
+        <p className="text-center text-gray-600 text-xs mt-6">
+          Powered by SmartServe ERP
         </p>
       </div>
     </div>
+  );
+}
+
+// 2. Default export wraps LoginForm in Suspense
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <Loader2 className="animate-spin text-orange-400" size={32} />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
