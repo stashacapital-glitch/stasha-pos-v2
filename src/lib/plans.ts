@@ -1,6 +1,6 @@
  // src/lib/plans.ts
 
-export type PlanType = 'basic' | 'standard' | 'regular' | 'pro';
+export type PlanType = 'basic' | 'standard' | 'regular' | 'pro' | 'custom';
 
 export interface PlanFeatures {
   name: string;
@@ -55,9 +55,9 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
       quickSale: false, 
       stock: true,
       offline: true,
-      tables: true,     // Table Management Included
-      kds: false,       // Add-on
-      rooms: false,     // Add-on
+      tables: true,
+      kds: false,
+      rooms: false,
       guests: false,
       payroll: false,
       tax: false,
@@ -65,7 +65,7 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
     },
   },
 
-  // 3. REGULAR PLAN (Includes KDS now)
+  // 3. REGULAR PLAN
   regular: {
     name: 'Regular',
     price: '8,000',
@@ -77,7 +77,7 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
       stock: true,
       offline: true,
       tables: true,
-      kds: true,       // Included per strategy
+      kds: true,       
       rooms: true,
       guests: true,
       payroll: true,
@@ -86,10 +86,31 @@ export const PLANS: Record<PlanType, PlanFeatures> = {
     },
   },
 
-  // 4. PRO PLAN (Anchor Price)
+  // 4. PRO PLAN (Fixed High-Tier)
   pro: {
     name: 'Pro',
-    price: '15,000+', // Anchor Price
+    price: '15,000',
+    userLimit: Infinity,
+    tableLimit: null,
+    features: {
+      pos: true,
+      quickSale: false,
+      stock: true,
+      offline: true,
+      tables: true,
+      kds: true,
+      rooms: true,
+      guests: true,
+      payroll: true,
+      tax: true,
+      multiBranch: true, // Multi-branch included
+    },
+  },
+
+  // 5. CUSTOM PLAN (Enterprise)
+  custom: {
+    name: 'Custom',
+    price: 'Custom',
     userLimit: Infinity,
     tableLimit: null,
     features: {
